@@ -1,106 +1,29 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SmartMatch — подбор подрядчиков</title>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="SmartMatch — подбор event-подрядчиков по описанию задачи. До трёх кандидатов с объяснением на основе их профилей."><meta name="theme-color" content="#f7f8fa"><title>SmartMatch — подрядчики под вашу задачу</title><link rel="icon" href="./favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="./styles.css"><script src="./app.js" defer></script>
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="/" aria-label="SmartMatch">SMARTMATCH</a>
-    <div class="top-meta">
-      <span id="catalogCount">66 профилей</span>
-      <span>детерминированный отбор</span>
-    </div>
-  </header>
-
-  <main>
-    <section class="hero">
-      <h1>ПОДРЯДЧИКИ, КОТОРЫХ<br>МОЖНО ОБОСНОВАТЬ</h1>
-      <p class="hero-copy">получите до 3<br>идеальных<br>кандидатов под<br>ваши требования</p>
-      <div class="quality-card">
-        <strong id="qualityNumber">66/66</strong>
-        <span>прошли проверку<br>критических данных</span>
-      </div>
-    </section>
-
-    <div class="slogan" aria-label="Принцип сервиса">
-      <span></span>
-      <p>никаких общих фраз, только аргументированное решение</p>
-      <span></span>
-    </div>
-
-    <section class="benefits" aria-label="Преимущества">
-      <article><strong>🎯 Фокус на главном</strong><p>описание</p></article>
-      <article><strong>💡 Понятная аргументация</strong><p>описание</p></article>
-      <article><strong>⚡ Актуальность данных</strong><p>описание</p></article>
-    </section>
-
-    <div class="rule"></div>
-
-    <section class="workspace">
-      <div class="form-panel">
-        <h2>Параметры заказа</h2>
-        <form id="searchForm">
-          <div class="field-grid">
-            <label>Город*<select id="city" required></select></label>
-            <label>Дата*<input id="eventDate" type="date" required></label>
-            <label>Язык*<select id="language" required></select></label>
-            <label>Категория*<select id="category" required></select></label>
-          </div>
-
-          <label class="short-field">Длительность, ч
-            <input id="duration" type="number" min="1" max="24" step="0.5">
-          </label>
-
-          <fieldset class="budget-field">
-            <legend>Бюджет</legend>
-            <div class="budget-inputs">
-              <label><span>От</span><input id="budgetFrom" type="number" min="0" step="50000" value="0"></label>
-              <label><span>До</span><input id="budget" type="number" min="50000" step="50000" value="1500000" required></label>
-            </div>
-            <div class="range-track" aria-hidden="true"><span></span><i></i><i></i></div>
-          </fieldset>
-
-          <label>Дополнительные детали
-            <textarea id="preferences" rows="4"></textarea>
-          </label>
-
-          <label class="format-field">Формат мероприятия*
-            <select id="eventFormat" required></select>
-          </label>
-
-          <button class="primary" type="submit"><span>подобрать подрядчика &gt;</span></button>
-        </form>
-      </div>
-
-      <section class="results-shell" aria-live="polite">
-        <div id="emptyState" class="empty-state">
-          <strong>До 3</strong>
-          <h2>проверенных кандидатов</h2>
-          <p>Заполните параметры заказа — здесь появятся карточки с конкретным объяснением выбора.</p>
-        </div>
-        <div id="result" hidden></div>
-      </section>
-    </section>
-  </main>
-
-  <footer>
-    <div class="contact">
-      <p>Need help? Contact us!</p>
-      <a href="mailto:foyou@mail.com">foyou@mail.com</a>
-      <a href="tel:000123456789">000-123-456-789</a>
-    </div>
-    <div class="footer-center">
-      <div class="socials" aria-label="Социальные сети"><a href="#" aria-label="Социальная сеть 1"></a><a href="#" aria-label="Социальная сеть 2"></a><a href="#" aria-label="Социальная сеть 3"></a></div>
-      <p>© 2025 Foyou, Inc. All rights reserved.</p>
-    </div>
-    <nav><a href="#">about the company</a><a href="#">user manual</a></nav>
-  </footer>
-
-  <script src="/app.js" defer></script>
-</body>
-</html>
-
+<a class="skip-link" href="#searchForm">Перейти к подбору</a>
+<header class="topbar wrap"><a class="brand" href="#" aria-label="SmartMatch, начало страницы"><span class="brand-icon" aria-hidden="true">✳</span> SMARTMATCH<span class="brand-ai">AI</span></a><nav aria-label="Навигация"><a href="#workspace">Подбор</a><a href="#howItWorks">Как это работает</a><a class="repo-link" href="https://github.com/BAITC-Hacks/hack-38743673-chezaurodynahackathone" target="_blank" rel="noopener">GitHub ↗</a></nav></header>
+<main class="wrap">
+<section class="hero" aria-labelledby="heroTitle"><div class="hero-main"><p class="eyebrow">HACKALEM AI · EVENT MATCHING</p><h1 id="heroTitle">Подрядчики, которых<br>можно <span>обосновать.</span></h1><p class="hero-copy">Опишите мероприятие — получите до трёх кандидатов<br class="desktop-break"> и факты, которые объясняют каждый выбор.</p></div><div class="quality-card"><div class="quality-label"><span class="status-dot"></span> Ваша выборка</div><div class="quality-number" id="qualityNumber">—<span>/—</span></div><p>профилей прошли проверку<br>критических данных</p><div class="quality-foot">Только данные каталога <span aria-hidden="true">↗</span></div></div></section>
+<section class="benefits" id="howItWorks" aria-label="Как работает подбор"><article><span class="step-number">01</span><div><h2>Опишите задачу</h2><p>Свободный текст и ваши условия</p></div></article><article><span class="step-number">02</span><div><h2>Проверим ограничения</h2><p>Город, дата, бюджет и формат</p></div></article><article><span class="step-number">03</span><div><h2>Объясним выбор</h2><p>Конкретные факты из профилей</p></div></article></section>
+<div class="section-heading" id="workspace"><div><p class="eyebrow">ОТ ЗАДАЧИ К КОРОТКОМУ СПИСКУ</p><h2>Найдём ваших людей</h2></div><span id="catalogCount" class="catalog-label">Загружаем каталог…</span></div>
+<section class="workspace" aria-label="Подбор подрядчиков">
+<aside class="form-panel"><form id="searchForm" novalidate>
+<div class="panel-title"><h3>Ваша задача</h3><button type="button" class="text-button" id="resetButton">Сбросить</button></div>
+<label for="description">Расскажите о мероприятии</label><textarea id="description" rows="5" maxlength="5000" placeholder="Например: нужен ведущий на корпоратив в Алматы 15 октября 2026, до 1,5 млн ₸. На русском, на 6 часов. Спокойная подача, без навязчивых конкурсов."></textarea>
+<div class="brief-actions"><button type="button" class="secondary-button" id="parseButton"><span aria-hidden="true">✦</span> Заполнить по описанию</button><span id="parseState" class="small-muted"></span></div>
+<div class="examples"><span>Примеры</span><button type="button" data-example="0">Корпоратив</button><button type="button" data-example="1">Свадьба</button></div><div id="briefNotice" class="notice" role="status" hidden></div>
+<div class="form-divider"><span>Параметры заказа</span><span class="small-muted">* обязательные</span></div>
+<div class="field-grid"><div class="field"><label for="city">Город *</label><select id="city" required><option value="">Выберите город</option></select></div><div class="field"><label for="eventDate">Дата *</label><input id="eventDate" type="date" required aria-describedby="calendarHint"></div><div class="field"><label for="category">Категория *</label><select id="category" required><option value="">Кого ищем?</option></select></div><div class="field"><label for="eventFormat">Формат *</label><select id="eventFormat" required><option value="">Выберите формат</option></select></div><div class="field"><label for="language">Язык</label><select id="language"><option value="">Любой</option></select></div><div class="field"><label for="duration">Длительность, ч</label><input id="duration" type="number" min="0.5" max="24" step="0.5" placeholder="Не указана"></div></div>
+<p id="calendarHint" class="field-hint">Календарь выборки: 23.09–31.12.2026</p><div class="field budget-field"><label for="budget">Максимальный бюджет, ₸ *</label><input id="budget" type="number" min="1" max="1000000000" step="1" placeholder="Например, 1 500 000" required><p class="field-hint">В профилях указана стоимость «от». Итоговую цену нужно уточнить.</p></div>
+<div class="ai-option"><label for="useAI"><input type="checkbox" id="useAI" disabled><span>Учитывать смысл с помощью ИИ</span></label><p id="aiStatus">Проверяем подключение…</p></div><button class="primary-button" id="searchButton" type="submit" disabled><span>Найти подрядчиков</span><span aria-hidden="true">↗</span></button><p class="submit-note">До 3 кандидатов · с объяснением выбора</p>
+</form></aside>
+<section class="results-panel" aria-label="Результаты подбора" aria-live="polite" aria-busy="false" id="resultsPanel"><div class="results-heading"><h3>Ваш короткий список</h3><span class="result-count" id="resultCount">0 / 3</span></div><div id="emptyState" class="empty-state"><div class="empty-symbol" aria-hidden="true">✳</div><p class="eyebrow">ПОДХОДЯЩИЕ ЛЮДИ. ПОНЯТНЫЙ ВЫБОР.</p><h3>Хороший подбор начинается<br>с вашей задачи</h3><p>Расскажите, кого ищете, или заполните параметры. Здесь появятся кандидаты, которые проходят ваши условия.</p><button type="button" class="secondary-button" id="demoButton">Посмотреть на примере <span aria-hidden="true">↗</span></button><div class="empty-foot"><span>Проверка занятости</span><span>Объяснение по профилю</span></div></div><div id="result" hidden></div></section>
+</section>
+<div class="data-note"><span class="note-mark" aria-hidden="true">i</span><p>Демонстрационная выборка HackAlem AI. <span id="provenanceNote">Исходные и синтетические профили помечены отдельно.</span> Занятость проверяется по календарю выборки; подбор не является бронированием.</p></div>
+</main>
+<footer class="wrap"><a class="brand footer-brand" href="#">SMARTMATCH<span class="brand-ai">AI</span></a><p>Меньше случайных решений. Больше фактов.</p><a href="https://github.com/BAITC-Hacks/hack-38743673-chezaurodynahackathone" target="_blank" rel="noopener">Проект на GitHub ↗</a></footer><noscript>Для подбора подрядчиков включите JavaScript в браузере.</noscript>
+</body></html>

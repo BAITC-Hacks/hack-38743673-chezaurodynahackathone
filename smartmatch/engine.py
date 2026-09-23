@@ -32,7 +32,7 @@ class RecommendationEngine:
         self.min_date = date.fromisoformat(meta["calendar"]["min"])
         self.max_date = date.fromisoformat(meta["calendar"]["max"])
 
-    def recommend(self, query: SearchQuery, limit: int = 3) -> dict:
+    def recommend(self, query: SearchQuery, limit: int = 3, semantic_scores: dict | None = None) -> dict:
         if not self.min_date <= query.event_date <= self.max_date:
             raise ValueError(
                 f"Дата вне календаря датасета: выберите день с {self.min_date.isoformat()} по {self.max_date.isoformat()}"
@@ -74,7 +74,7 @@ class RecommendationEngine:
             }
 
         ranked = sorted(
-            (self._rank(item, query) for item in current),
+            (self._rank(item, query, semantic_scores) for item in current),
             key=lambda row: (-row["score"], row["price_from_kzt"], row["id"]),
         )
         results = ranked[:limit]
@@ -96,13 +96,15 @@ class RecommendationEngine:
             "rejected_candidates": rejected_candidates,
         }
 
-    def _rank(self, item: Contractor, query: SearchQuery) -> dict:
+    def _rank(self, item: Contractor, query: SearchQuery, semantic_scores: dict | None = None) -> dict:
         query_text = " ".join(
             value for value in (
                 query.category, query.event_format, query.language or "", query.preferences,
             ) if value
         )
         semantic, matched = self.text_index.similarity(item.id, query_text)
+        if semantic_scores is not None and item.id in semantic_scores:
+            semantic = semantic_scores[item.id][0]
         ratio = item.price_from_kzt / query.budget_kzt
         budget_fit = max(0.0, 1 - abs(ratio - 0.72) / 0.72)
         language_fit = 1.0 if query.language and query.language in item.languages else 0.65
@@ -126,6 +128,8 @@ class RecommendationEngine:
             + 0.14 * provenance
         )
         evidence = self.text_index.evidence_sentence(item.id, matched)
+        if semantic_scores is not None and item.id in semantic_scores:
+            evidence = semantic_scores[item.id][1]
         explanation = self._explanation(item, query, evidence)
         return {
             "id": item.id,
@@ -203,4 +207,3 @@ class RecommendationEngine:
             "eligible_count": 0,
             "data_quality_excluded": len(self.repository.quarantined),
         }
-

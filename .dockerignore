@@ -4,3 +4,9 @@ outputs
 __pycache__
 *.pyc
 
+.git
+.env
+.env.*
+!.env.example
+*.log
+

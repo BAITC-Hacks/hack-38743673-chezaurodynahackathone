@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+import math
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +35,8 @@ class SearchQuery:
 
     @classmethod
     def from_dict(cls, value: dict) -> "SearchQuery":
+        if not isinstance(value, dict):
+            raise ValueError("Запрос должен быть объектом JSON")
         required = ("city", "event_date", "event_format", "category", "budget_kzt")
         missing = [key for key in required if value.get(key) in (None, "")]
         if missing:
@@ -45,11 +48,14 @@ class SearchQuery:
             raise ValueError("Дата должна быть в формате ГГГГ-ММ-ДД") from exc
 
         try:
-            budget = int(value["budget_kzt"])
+            raw_budget = value["budget_kzt"]
+            if isinstance(raw_budget, bool) or (isinstance(raw_budget, float) and (not math.isfinite(raw_budget) or not raw_budget.is_integer())):
+                raise ValueError("Некорректный бюджет")
+            budget = int(raw_budget)
         except (TypeError, ValueError) as exc:
             raise ValueError("Бюджет должен быть целым числом") from exc
-        if budget <= 0:
-            raise ValueError("Бюджет должен быть больше нуля")
+        if not 0 < budget <= 1_000_000_000:
+            raise ValueError("Бюджет должен быть от 1 до 1 000 000 000 ₸")
 
         duration_raw = value.get("duration_hours")
         duration = None
@@ -58,8 +64,8 @@ class SearchQuery:
                 duration = float(duration_raw)
             except (TypeError, ValueError) as exc:
                 raise ValueError("Длительность должна быть числом") from exc
-            if duration <= 0:
-                raise ValueError("Длительность должна быть больше нуля")
+            if isinstance(duration_raw, bool) or not math.isfinite(duration) or not 0 < duration <= 24:
+                raise ValueError("Длительность должна быть больше нуля и не больше 24 часов")
 
         language = str(value.get("language") or "").strip().lower() or None
         return cls(
@@ -72,4 +78,3 @@ class SearchQuery:
             language=language,
             preferences=str(value.get("preferences") or "").strip(),
         )
-

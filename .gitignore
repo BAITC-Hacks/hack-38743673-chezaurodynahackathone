@@ -7,3 +7,9 @@ work/
 outputs/
 .DS_Store
 
+.env
+.env.*
+!.env.example
+*.log
+
+**/set_test_key.ps1
