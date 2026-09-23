@@ -1,0 +1,19 @@
+# Скопируйте этот файл как set_test_key.ps1 и вставьте СВОЙ новый ключ OpenAI.
+# Файл set_test_key.ps1 исключён из Git через .gitignore.
+# Выполните в PowerShell: . .\set_test_key.ps1
+
+$env:AI_PROXY_API_KEY = "вставьте_сюда_ваш_ключ_OpenAI"
+
+# Эти два значения уже установлены в smartmatch.py. Оставьте строки закомментированными,
+# если используете OpenAI. Раскомментируйте только для совместимого стороннего прокси.
+# $env:AI_PROXY_URL = "https://api.openai.com/v1/chat/completions"
+# $env:AI_PROXY_MODEL = "gpt-5.4-nano"
+
+# Третий этап по умолчанию использует тот же ключ и URL, но модель gpt-5.4-mini.
+# Отдельные настройки нужны только при другом прокси или ключе третьего этапа:
+# $env:EXPLANATION_PROXY_URL = "https://api.openai.com/v1/chat/completions"
+# $env:EXPLANATION_PROXY_MODEL = "gpt-5.4-mini"
+# $env:EXPLANATION_PROXY_API_KEY = "ключ_третьего_этапа"
+# Проверка: python verify_profile_explanations.py --live
+
+Write-Host "Ключ загружен в текущее окно PowerShell."

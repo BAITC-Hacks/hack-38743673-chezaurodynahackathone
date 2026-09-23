@@ -1,0 +1,56 @@
+{
+  "request": {
+    "preferences": "Спокойное проведение деловой встречи с музыкальными паузами",
+    "budget_kzt": 1000000,
+    "language": "русский",
+    "duration_hours": 6,
+    "event_format": "корпоратив"
+  },
+  "selected_profiles": [
+    {
+      "profile": {
+        "id": "demo-a",
+        "anon_name": "Демонстрационный профиль А",
+        "description": "Веду деловые встречи со сдержанной подачей и помогаю организовать обсуждения.",
+        "price_from_kzt": 750000,
+        "event_formats": ["корпоратив", "конференция"],
+        "languages": ["русский", "английский"],
+        "max_hours": 8,
+        "experience_years": 7,
+        "synthetic": true
+      },
+      "score": 92,
+      "penalties": {"text": 8}
+    },
+    {
+      "profile": {
+        "id": "demo-b",
+        "anon_name": "Демонстрационный профиль Б",
+        "description": "Провожу корпоративы с музыкальными паузами и интерактивными конкурсами.",
+        "price_from_kzt": 600000,
+        "event_formats": ["корпоратив"],
+        "languages": ["русский"],
+        "max_hours": 6,
+        "experience_years": 5,
+        "synthetic": true
+      },
+      "score": 86,
+      "penalties": {"text": 14}
+    },
+    {
+      "profile": {
+        "id": "demo-c",
+        "anon_name": "Демонстрационный профиль В",
+        "description": "Модерирую деловые дискуссии и панельные обсуждения, согласую сценарий с заказчиком.",
+        "price_from_kzt": 900000,
+        "event_formats": ["корпоратив", "конференция"],
+        "languages": ["русский", "казахский"],
+        "max_hours": 7,
+        "experience_years": 10,
+        "synthetic": true
+      },
+      "score": 81,
+      "penalties": {"text": 19}
+    }
+  ]
+}
