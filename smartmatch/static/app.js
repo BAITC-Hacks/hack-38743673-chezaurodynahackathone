@@ -1,7 +1,7 @@
 'use strict';
 const $ = selector => document.querySelector(selector);
-const state = {meta:null, busy:false, briefDirty:false, hasResults:false, formRevision:0, manualFields:new Set()};
-const fields = {city:'city',event_date:'eventDate',category:'category',event_format:'eventFormat',language:'language',duration_hours:'duration',budget_kzt:'budget'};
+const state = {meta:null, busy:false, briefDirty:false, hasResults:false, searchId:null, formRevision:0, manualFields:new Set()};
+const fields = {city:'city',event_date:'eventDate',category:'category',event_format:'eventFormat',language:'language',duration_hours:'duration',budget_kzt:'budget',min_budget_kzt:'minBudget',sort_by:'sortBy'};
 const fieldNames = {city:'город',event_date:'дата',category:'категория',event_format:'формат',budget_kzt:'бюджет',language:'язык',duration_hours:'длительность'};
 const money = value => new Intl.NumberFormat('ru-RU').format(value)+' ₸';
 const escapeHtml = value => String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -44,15 +44,18 @@ function notice(text,warning=false){
 }
 function applyQuery(query){
   for(const [key,id] of Object.entries(fields)){
-    const element=$('#'+id);const value=query[key]??'';
+    const element=$('#'+id);const value=query[key]??(key==='sort_by'?'relevance':'');
     if(element.tagName==='SELECT'&&value&&!Array.from(element.options).some(o=>o.value===String(value))) element.add(new Option(value,value));
     element.value=value;
   }
+  validateBudgetRange();
 }
 function queryFromForm(){
-  return {city:$('#city').value,event_date:$('#eventDate').value,category:$('#category').value,event_format:$('#eventFormat').value,language:$('#language').value||null,duration_hours:$('#duration').value?Number($('#duration').value):null,budget_kzt:Number($('#budget').value),preferences:$('#description').value.trim(),use_ai:$('#useAI').checked};
+  return {city:$('#city').value,event_date:$('#eventDate').value,category:$('#category').value,event_format:$('#eventFormat').value,language:$('#language').value||null,duration_hours:$('#duration').value?Number($('#duration').value):null,budget_kzt:Number($('#budget').value),min_budget_kzt:Number($('#minBudget').value)||0,include_synthetic:$('#includeSynthetic').checked,sort_by:$('#sortBy').value,preferences:$('#description').value.trim(),use_ai:$('#useAI').checked};
 }
 function markStale(){
+  state.searchId=null;
+  document.querySelectorAll('[data-select-contractor]').forEach(button=>button.disabled=true);
   if(state.hasResults&&!$('#staleNotice')){
     const message=document.createElement('div');message.id='staleNotice';message.className='stale-label';
     message.textContent='Условия изменены. Выполните подбор ещё раз, чтобы обновить список.';
@@ -66,7 +69,7 @@ async function parseBrief(){
   const data=await request('/api/parse-brief',{description,use_ai:$('#useAI').checked});
   if(revision!==state.formRevision){notice('Описание или параметры изменились во время разбора. Повторите разбор, чтобы применить актуальный текст.',true);return null;}
   const manual={};
-  for(const key of state.manualFields){const value=$('#'+fields[key]).value;if(value!=='')manual[key]=value;}
+  for(const key of state.manualFields)manual[key]=$('#'+fields[key]).value;
   applyQuery({...data.query,...manual});state.briefDirty=false;
   const missing=['city','event_date','category','event_format','budget_kzt'].filter(key=>!$('#'+fields[key]).value).map(key=>fieldNames[key]);
   const warnings=(data.warnings||[]).map(String);
@@ -84,13 +87,11 @@ async function onParse(){
   try{await parseBrief();}catch(error){notice(error.message,true);}finally{setBusy(false);}
 }
 function examples(index){
-  const items=[
-    {city:'Алматы',event_date:'2026-10-06',category:'Ведущий',event_format:'корпоратив',language:'русский',duration_hours:5,budget_kzt:1000000,description:'Нужен ведущий на корпоратив в Алматы 6 октября 2026 года. Бюджет до 1 млн тенге, русский язык, 5 часов. Интеллигентная подача для бизнес-аудитории, без навязчивых конкурсов.'},
-    {city:'Алматы',event_date:'2026-10-04',category:'Флорист',event_format:'свадьба',language:'русский',duration_hours:null,budget_kzt:500000,description:'Нужен флорист на свадьбу в Алматы 4 октября 2026 года. Бюджет до 500 тысяч тенге. Общение на русском, авторское цветочное оформление и нежные композиции.'}
-  ];return items[index];
+  const sample=state.meta.demo_cases[index];
+  return {...sample.query,description:sample.description};
 }
 function applyExample(index){
-  const query=examples(index);state.manualFields.clear();applyQuery(query);$('#description').value=query.description;state.briefDirty=false;state.formRevision++;
+  const query=examples(index);state.manualFields.clear();applyQuery(query);$('#includeSynthetic').checked=true;$('#description').value=query.description;state.briefDirty=false;state.formRevision++;
   $('#parseState').textContent='Пример';notice('Пример заполнен. Вы можете изменить описание и параметры.');markStale();
 }
 async function submit(event,localDemo=false){
@@ -103,6 +104,7 @@ async function submit(event,localDemo=false){
       notice($('#briefNotice').textContent+' Проверьте распознанные условия и нажмите «Найти подрядчиков» ещё раз.',!!parsed.missing_fields?.length);
       $('#searchForm').reportValidity();return;
     }
+    validateBudgetRange();
     if(!$('#searchForm').reportValidity())return;
     const query=queryFromForm();if(localDemo)query.use_ai=false;
     const revision=state.formRevision;
@@ -115,10 +117,11 @@ async function submit(event,localDemo=false){
   }catch(error){renderError(error.message);}finally{setBusy(false);}
 }
 function renderResult(data,query,runtime,demo){
+  state.searchId=data.saved?data.search_id:null;
   state.hasResults=true;$('#emptyState').hidden=true;$('#result').hidden=false;$('#resultCount').textContent=data.results.length+' / 3';
   const success=data.status==='success';
   const mode=data.ai?.used?'ИИ-подбор':(data.ai?.message||'Локальный поиск по словам. ИИ не использовался.');
-  $('#result').innerHTML=`<div class="outcome ${success?'':'warning'}"><span class="outcome-icon" aria-hidden="true">${success?'✓':'!'}</span><div><h4>${escapeHtml(data.title)}</h4><p>${escapeHtml(data.message)}</p></div></div><p class="mode-note">${demo?'Пример подбора · ':''}${escapeHtml(mode)}${data.ai?.used&&data.ai.message?' · '+escapeHtml(data.ai.message):''}<br>${escapeHtml(fullDate(query.event_date))} · ${escapeHtml(query.city)} · до ${money(query.budget_kzt)} · ${(runtime/1000).toFixed(1)} с</p><div class="cards">${data.results.map((item,index)=>renderCard(item,index,query)).join('')}</div>${renderAudit(data)}`;
+  $('#result').innerHTML=`<div class="outcome ${success?'':'warning'}"><span class="outcome-icon" aria-hidden="true">${success?'✓':'!'}</span><div><h4>${escapeHtml(data.title)}</h4><p>${escapeHtml(data.message)}</p></div></div><p class="mode-note">${demo?'Пример подбора · ':''}${escapeHtml(mode)}${data.ai?.used&&data.ai.message?' · '+escapeHtml(data.ai.message):''}<br>${escapeHtml(fullDate(query.event_date))} · ${escapeHtml(query.city)} · до ${money(query.budget_kzt)} · ${(runtime/1000).toFixed(1)} с</p><div class="cards">${data.results.map((item,index)=>renderCard(item,index,query)).join('')}</div>${renderAudit(data)}<p class="saved-note">${data.saved?'Запрос и результат сохранены в базе.':''}</p>`;
 }
 function renderCard(item,index,query){
   const badges=[`<span class="tag">${escapeHtml(item.id)}</span>`,`<span class="tag">${item.synthetic?'Синтетический профиль':'Исходный профиль'}</span>`];
@@ -127,13 +130,14 @@ function renderCard(item,index,query){
   if(item.city_imputed)badges.push('<span class="tag imputed">Город восстановлен</span>');
   const days=(item.busy_dates||[]).map(compactDate).join(', ');
   const scoreFactors=Object.entries(item.score_factors||{}).map(([name,value])=>`<div class="pipeline-row"><span>${escapeHtml(name)}</span><strong>${escapeHtml(value)} / 100</strong></div>`).join('');
-  return `<article class="contractor-card"><div class="card-head"><span class="rank" aria-label="Место ${index+1}">${index+1}</span><div class="card-title"><h4>${escapeHtml(item.name)}</h4><p>${escapeHtml(item.category)} · ${escapeHtml(item.city)}</p></div><div class="price"><strong>от ${money(item.price_from_kzt)}</strong><span>в рамках бюджета</span></div></div><div class="tags">${badges.join('')}</div><div class="explanation"><div class="explanation-label"><span aria-hidden="true">✦</span> Почему этот кандидат</div><p>${escapeHtml(item.explanation)}</p></div><dl class="profile-facts"><div><dt>Форматы</dt><dd>${escapeHtml(item.event_formats.join(', '))}</dd></div><div><dt>Языки</dt><dd>${escapeHtml(item.languages.join(', '))}</dd></div><div><dt>Ваша дата · ${escapeHtml(compactDate(query.event_date))}</dt><dd>Не занята в календаре выборки</dd></div><div><dt>Время на площадке</dt><dd>${item.max_hours==null?'Не применяется к профилю':escapeHtml(item.max_hours)+' ч максимум'}</dd></div></dl><details class="card-details"><summary>Занятые даты и оценка соответствия</summary><p>Занятые даты 2026 года: ${escapeHtml(days||'не указаны')}.</p><p>Оценка: ${escapeHtml(item.score)} из 100. Это балл ранжирования, а не вероятность успеха.</p>${scoreFactors}</details></article>`;
+  return `<article class="contractor-card"><div class="card-head"><span class="rank" aria-label="Место ${index+1}">${index+1}</span><div class="card-title"><h4>${escapeHtml(item.name)}</h4><p>${escapeHtml(item.category)} · ${escapeHtml(item.city)}</p></div><div class="price"><strong>от ${money(item.price_from_kzt)}</strong><span>в рамках бюджета</span></div></div><div class="tags">${badges.join('')}</div><div class="explanation"><div class="explanation-label"><span aria-hidden="true">✦</span> Почему этот кандидат</div><p>${escapeHtml(item.explanation)}</p></div><dl class="profile-facts"><div><dt>Форматы</dt><dd>${escapeHtml(item.event_formats.join(', '))}</dd></div><div><dt>Языки</dt><dd>${escapeHtml(item.languages.join(', '))}</dd></div><div><dt>Ваша дата · ${escapeHtml(compactDate(query.event_date))}</dt><dd>Не занята в календаре выборки</dd></div><div><dt>Время на площадке</dt><dd>${item.max_hours==null?'Не применяется к профилю':escapeHtml(item.max_hours)+' ч максимум'}</dd></div></dl><details class="card-details"><summary>Занятые даты и оценка соответствия</summary><p>Занятые даты 2026 года: ${escapeHtml(days||'не указаны')}.</p><p>Оценка: ${escapeHtml(item.score)} из 100. Это балл ранжирования, а не вероятность успеха.</p>${scoreFactors}</details>${state.searchId?`<div class="selection-actions"><button type="button" class="secondary-button" data-select-contractor="${escapeHtml(item.id)}">Интересен этот подрядчик</button><span class="selection-feedback" role="status"></span></div>`:''}</article>`;
 }
 function renderAudit(data){
   const exclusions=Object.entries(data.exclusions||{}).filter(([,count])=>count);
   return `<details class="audit"><summary>Как прошёл отбор</summary><div class="audit-grid"><div><h5>Этапы проверки</h5>${(data.pipeline||[]).map(row=>`<div class="pipeline-row"><span>${escapeHtml(row.stage)}</span><strong>${escapeHtml(row.remaining)}</strong></div>`).join('')}</div><div><h5>Причины исключения</h5>${exclusions.length?exclusions.map(([name,count])=>`<div class="exclusion-row"><span>${escapeHtml(name)}</span><strong>${count}</strong></div>`).join(''):'<p>Дополнительных исключений нет.</p>'}<p class="footnote">Один профиль может не пройти несколько условий.</p></div></div></details>`;
 }
 function renderError(message){
+  state.searchId=null;
   state.hasResults=false;$('#emptyState').hidden=true;$('#result').hidden=false;$('#resultCount').textContent='0 / 3';
   $('#result').innerHTML=`<div class="outcome warning" role="alert"><span class="outcome-icon" aria-hidden="true">!</span><div><h4>Не удалось выполнить подбор</h4><p>${escapeHtml(message)}</p></div></div>`;
 }
@@ -146,6 +150,7 @@ async function loadMeta(){
   $('#qualityNumber').innerHTML=state.meta.contractors+'<span>/'+(state.meta.contractors+state.meta.quarantined_count)+'</span>';
   $('#provenanceNote').textContent=`${state.meta.contractors-state.meta.synthetic_count} исходных и ${state.meta.synthetic_count} синтетических профилей. `;
   const ai=state.meta.ai||{};$('#useAI').disabled=!ai.configured;$('#useAI').checked=!!ai.configured;
+  $('#storageStatus').textContent=state.meta.storage?.enabled?'Описание, условия, результаты и отмеченные кандидаты сохраняются в базе этого сервера. Не указывайте в описании контакты и личные данные.':'Сохранение истории недоступно.';
   const provider={openai:'OpenAI',gemini:'Gemini',compatible:'ИИ'}[ai.provider]||'ИИ';
   $('#aiStatus').textContent=ai.configured?provider+' настроен на сервере. ИИ анализирует описание и сравнивает подходящих кандидатов.':'OpenAI пока не подключён. Доступны локальный разбор и поиск по словам.';
   setBusy(false);
@@ -153,10 +158,30 @@ async function loadMeta(){
 $('#searchForm').addEventListener('submit',submit);
 $('#parseButton').addEventListener('click',onParse);
 $('#description').addEventListener('input',()=>{state.briefDirty=true;$('#parseState').textContent='';});
-function formChanged(event){state.formRevision++;const key=Object.keys(fields).find(key=>fields[key]===event.target.id);if(key)state.manualFields.add(key);markStale();}
+function validateBudgetRange(){
+  const low=Number($('#minBudget').value),high=Number($('#budget').value);
+  $('#minBudget').setCustomValidity(high>0&&low>high?'Нижняя граница должна быть не больше максимального бюджета.':'');
+}
+function formChanged(event){state.formRevision++;const key=Object.keys(fields).find(key=>fields[key]===event.target.id);if(key)state.manualFields.add(key);validateBudgetRange();markStale();}
 $('#searchForm').addEventListener('input',formChanged);
 $('#searchForm').addEventListener('change',formChanged);
-$('#resetButton').addEventListener('click',()=>{$('#searchForm').reset();applyQuery({});$('#description').value='';$('#useAI').checked=!!state.meta?.ai?.configured;state.briefDirty=false;state.hasResults=false;state.manualFields.clear();state.formRevision++;notice('');$('#parseState').textContent='';$('#result').hidden=true;$('#result').replaceChildren();$('#emptyState').hidden=false;$('#resultCount').textContent='0 / 3';$('#description').focus();});
+$('#resetButton').addEventListener('click',()=>{$('#searchForm').reset();applyQuery({});validateBudgetRange();$('#description').value='';$('#useAI').checked=!!state.meta?.ai?.configured;state.briefDirty=false;state.hasResults=false;state.searchId=null;state.manualFields.clear();state.formRevision++;notice('');$('#parseState').textContent='';$('#result').hidden=true;$('#result').replaceChildren();$('#emptyState').hidden=false;$('#resultCount').textContent='0 / 3';$('#description').focus();});
 document.querySelectorAll('[data-example]').forEach(button=>button.addEventListener('click',()=>applyExample(Number(button.dataset.example))));
 $('#demoButton').addEventListener('click',async()=>{applyExample(0);await submit(null,true);});
+$('#result').addEventListener('click',async event=>{
+  const button=event.target.closest('[data-select-contractor]');
+  if(!button||button.disabled||!state.searchId)return;
+  const searchId=state.searchId;
+  button.disabled=true;
+  const status=button.nextElementSibling;
+  status.textContent='Сохраняем…';
+  try{
+    await request('/api/selection',{search_id:searchId,contractor_id:button.dataset.selectContractor});
+    button.textContent='Отмечен ✓';
+    status.textContent='Интерес сохранён. Это не бронирование.';
+  }catch(error){
+    status.textContent=error.message;
+    button.disabled=state.searchId!==searchId;
+  }
+});
 loadMeta().catch(error=>{renderError(error.message);$('#catalogCount').textContent='Каталог недоступен';$('#aiStatus').textContent='Нет соединения с сервером';setBusy(false);});

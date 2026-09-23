@@ -1,7 +1,7 @@
 [project]
 name = "smartmatch-hackalem"
-version = "1.0.0"
-description = "Deterministic explainable contractor matching for HackAlem AI"
+version = "1.1.0"
+description = "SmartMatch MVP: explainable contractor matching with SQLite and server-side AI"
 requires-python = ">=3.11"
 dependencies = []
 

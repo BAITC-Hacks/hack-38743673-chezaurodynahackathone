@@ -5,6 +5,7 @@ import json
 import tempfile
 import time
 import unittest
+from dataclasses import replace
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -83,6 +84,36 @@ class BriefTests(unittest.TestCase):
             with self.subTest(text=text):
                 query, warnings = extract_local(text, self.meta)
                 self.assertNotIn("budget_kzt", query)
+                self.assertTrue(warnings)
+
+    def test_budget_range_uses_upper_limit_never_lower_bound(self):
+        for text, maximum in (("Бюджет 300-500 тысяч тенге", 500_000),
+                              ("Бюджет от 300 до 500 тыс тенге", 500_000),
+                              ("Бюджет 300 тыс — 1 млн тенге", 1_000_000),
+                              ("Цена 100000–200000 ₸", 200_000)):
+            with self.subTest(text=text):
+                query, _ = extract_local(text, self.meta)
+                self.assertEqual(query["budget_kzt"], maximum)
+        for text in ("Бюджет 500-300 тысяч тенге", "Бюджет 300-500 тысяч рублей"):
+            with self.subTest(text=text):
+                self.assertNotIn("budget_kzt", extract_local(text, self.meta)[0])
+
+    def test_negated_city_and_event_format_are_not_required(self):
+        query, warnings = extract_local("Фотограф в Алматы, не в Астане. Не нужна свадьба, нужен корпоратив.", self.meta)
+        self.assertEqual(query["city"], "Алматы")
+        self.assertEqual(query["event_format"], "корпоратив")
+        self.assertEqual(warnings, [])
+
+    def test_model_category_quote_must_prove_the_selected_value(self):
+        for text, value, quote in (("Нужен ведущий в Алматы", "Астана", "ведущий"),
+                                   ("Нужен ведущий в Алматы", "Астана", "Алматы"),
+                                   ("Нужен ведущий в Алматы, не в Астане", "Астана", "Астане"),
+                                   ("Ведущий в Алматы или Астане", "Алматы", "Алматы")):
+            with self.subTest(text=text, value=value):
+                raw = {key: {"value": None, "quote": None} for key in EXTRACTED_FIELDS}
+                raw["city"] = {"value": value, "quote": quote}
+                query, warnings = validate_extraction(raw, text, self.meta)
+                self.assertNotIn("city", query)
                 self.assertTrue(warnings)
 
     def test_grounded_model_extraction(self):
@@ -267,6 +298,21 @@ class AIServiceTests(unittest.TestCase):
         result = recommend_with_ai(self.engine, query, AIService(AIConfig(api_key="unit-test-token"), transport=fail))
         self.assertEqual(result["status"], "no_market")
         self.assertFalse(result["ai"]["used"])
+
+    def test_ai_respects_extra_filters_and_requested_price_sort(self):
+        seen = []
+        def transport(url, headers, payload, timeout):
+            data = json.loads(payload["input"])
+            seen.extend(data["candidates"])
+            return response({"candidates": [{"id": item["id"], "score": index,
+                        "quote": item["description"][:100]} for index, item in enumerate(data["candidates"])]})
+        query = replace(self.query, min_budget_kzt=400_000, include_synthetic=False, sort_by="price_desc")
+        result = recommend_with_ai(self.engine, query, AIService(AIConfig(api_key="unit-test-token"), transport=transport))
+        self.assertTrue(result["ai"]["used"])
+        allowed = self.engine.recommend(query, limit=100)["results"]
+        self.assertEqual({row["id"] for row in seen}, {row["id"] for row in allowed})
+        self.assertEqual([row["id"] for row in result["results"]], [row["id"] for row in allowed[:3]])
+        self.assertTrue(all(not row["synthetic"] and row["price_from_kzt"] >= 400_000 for row in result["results"]))
 
 
 if __name__ == "__main__":

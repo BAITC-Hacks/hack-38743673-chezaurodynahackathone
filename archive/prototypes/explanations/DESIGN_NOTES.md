@@ -1,13 +1,10 @@
-# SmartMatch: база, ранжирование и объяснение профилей
+> Исторический прототип, сохранённый для сравнения. Эти команды и настройки не используются MVP. Актуальное руководство: [единый README](../../../README.md).
+
+# SmartMatch: ранжирование и объяснение трёх профилей
 
 Два модуля для Python 3.11+: `smartmatch.py` выбирает до трёх кандидатов после
 внешней жёсткой фильтрации; `profile_explanations.py` сравнивает выбранные карточки
 и добавляет к каждой краткое объяснение. [Настройка ключа и прокси — API_SETUP.md](API_SETUP.md).
-
-Каталог хранится в `data/profiles.sqlite3`: 53 исходных профиля, 13 синтетических
-из CSV и 30 дополнительно сгенерированных. Создание или повторный импорт:
-`python init_database.py`. Схема, чтение из Python и правила генерации описаны
-в [DATABASE_GUIDE.md](DATABASE_GUIDE.md). Жёсткий отбор выполняется внешним модулем.
 
 ## Этап 2: ранжирование
 
@@ -114,10 +111,8 @@ def build_recommendations(order, filtered_rows):
 
 ## Файлы для передачи команде
 
-Передайте `smartmatch.py`, `profile_explanations.py`, файлы `test_*.py`,
+Передайте `smartmatch.py`, `profile_explanations.py`, оба файла `test_*.py`,
 `verify_openai_proxy.py`, `verify_profile_explanations.py`, папку `examples`,
 `README.md`, `API_SETUP.md`, `set_test_key.ps1.example` и `.gitignore`.
 Локальный `set_test_key.ps1` с ключом, `.env` и `__pycache__` в передачу не включаются.
-Для базы также нужны `profile_database.py`, `init_database.py`, `generate_profiles.py`,
-`schema.sql`, `synthetic_profile_rules.json`, `contractors.csv`, `DATABASE_GUIDE.md`.
-Готовую `data/profiles.sqlite3` можно передать вместе с ними или создать командой импорта.
+`contractors.csv` этим двум модулям не нужен; его можно передать отдельно как исходный каталог.

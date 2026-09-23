@@ -10,10 +10,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from smartmatch import ContractorRepository, RecommendationEngine, SearchQuery  # noqa: E402
-from smartmatch.web import DEMO_CASES  # noqa: E402
+from smartmatch.samples import DEMO_CASES  # noqa: E402
 
 
-def main() -> None:
+def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     repository = ContractorRepository.from_csv(ROOT / "data" / "contractors.csv")
     engine = RecommendationEngine(repository)
     by_id = {item.id: item for item in repository.contractors}
@@ -70,8 +72,8 @@ def main() -> None:
         ),
     }
     print(json.dumps(report, ensure_ascii=False, indent=2))
+    return 0 if report["all_checks_passed"] else 1
 
 
 if __name__ == "__main__":
-    main()
-
+    raise SystemExit(main())

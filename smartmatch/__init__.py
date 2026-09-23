@@ -5,4 +5,3 @@ from .models import SearchQuery
 from .repository import ContractorRepository
 
 __all__ = ["ContractorRepository", "RecommendationEngine", "SearchQuery"]
-

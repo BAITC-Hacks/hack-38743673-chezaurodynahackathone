@@ -33,6 +33,8 @@ class RecommendationEngine:
         self.max_date = date.fromisoformat(meta["calendar"]["max"])
 
     def recommend(self, query: SearchQuery, limit: int = 3, semantic_scores: dict | None = None) -> dict:
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            raise ValueError("Количество результатов должно быть положительным целым числом")
         if not self.min_date <= query.event_date <= self.max_date:
             raise ValueError(
                 f"Дата вне календаря датасета: выберите день с {self.min_date.isoformat()} по {self.max_date.isoformat()}"
@@ -71,17 +73,27 @@ class RecommendationEngine:
                 "eligible_count": 0,
                 "data_quality_excluded": len(self.repository.quarantined),
                 "rejected_candidates": rejected_candidates,
+                "sort_by": query.sort_by,
             }
 
+        sort_keys = {
+            "relevance": lambda row: (-row["score"], row["id"]),
+            "price_asc": lambda row: (row["price_from_kzt"], row["id"]),
+            "price_desc": lambda row: (-row["price_from_kzt"], row["id"]),
+        }
+        if query.sort_by not in sort_keys:
+            raise ValueError("Неизвестный порядок сортировки")
         ranked = sorted(
             (self._rank(item, query, semantic_scores) for item in current),
-            key=lambda row: (-row["score"], row["price_from_kzt"], row["id"]),
+            key=sort_keys[query.sort_by],
         )
         results = ranked[:limit]
         if len(current) < limit:
             message = self._partial_message(len(current), len(market), exclusions)
         else:
-            message = f"Из {len(market)} профилей условия прошли {len(current)}. Показаны три с самым сильным подтверждённым совпадением."
+            order = {"relevance": "по соответствию запросу", "price_asc": "по возрастанию стартовой цены",
+                     "price_desc": "по убыванию стартовой цены"}[query.sort_by]
+            message = f"Из {len(market)} профилей условия прошли {len(current)}. Показаны {len(results)} {order}."
 
         return {
             "status": "success",
@@ -94,6 +106,7 @@ class RecommendationEngine:
             "eligible_count": len(current),
             "data_quality_excluded": len(self.repository.quarantined),
             "rejected_candidates": rejected_candidates,
+            "sort_by": query.sort_by,
         }
 
     def _rank(self, item: Contractor, query: SearchQuery, semantic_scores: dict | None = None) -> dict:
@@ -206,4 +219,6 @@ class RecommendationEngine:
             "market_count": 0,
             "eligible_count": 0,
             "data_quality_excluded": len(self.repository.quarantined),
+            "rejected_candidates": [],
+            "sort_by": query.sort_by,
         }

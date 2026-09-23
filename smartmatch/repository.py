@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import math
 from datetime import date
 from pathlib import Path
 
@@ -12,7 +13,7 @@ CALENDAR_END = date(2026, 12, 31)
 
 
 def _items(value: str) -> tuple[str, ...]:
-    return tuple(item.strip() for item in (value or "").split("|") if item.strip())
+    return tuple(dict.fromkeys(item.strip() for item in (value or "").split("|") if item.strip()))
 
 
 def _flag(value: str) -> bool:
@@ -54,9 +55,9 @@ class ContractorRepository:
                         synthetic=_flag(row["synthetic"]),
                         price_from_kzt=int(row["price_from_kzt"]),
                         price_imputed=_flag(row["price_imputed"]),
-                        event_formats=tuple(x.lower() for x in _items(row["event_formats"])),
-                        languages=tuple(x.lower() for x in _items(row["languages"])),
-                        max_hours=float(row["max_hours"]) if row["max_hours"].strip() else None,
+                        event_formats=tuple(dict.fromkeys(x.lower() for x in _items(row["event_formats"]))),
+                        languages=tuple(dict.fromkeys(x.lower() for x in _items(row["languages"]))),
+                        max_hours=float(row["max_hours"]) if (row.get("max_hours") or "").strip() else None,
                         busy_dates=frozenset(date.fromisoformat(x) for x in _items(row["busy_dates"])),
                         description=row["description"].strip(),
                     )
@@ -68,14 +69,18 @@ class ContractorRepository:
         checks = {
             "id": (row.get("id") or "").strip(),
             "имя": (row.get("anon_name") or "").strip(),
-            "категория": (row.get("categories") or "").strip(),
+            "категория": _items(row.get("categories") or ""),
             "город": (row.get("city") or "").strip(),
-            "формат": (row.get("event_formats") or "").strip(),
-            "язык": (row.get("languages") or "").strip(),
-            "календарь": (row.get("busy_dates") or "").strip(),
+            "формат": _items(row.get("event_formats") or ""),
+            "язык": _items(row.get("languages") or ""),
             "описание": (row.get("description") or "").strip(),
         }
         issues = [f"нет поля: {label}" for label, value in checks.items() if not value]
+        for flag in ("city_imputed", "synthetic", "price_imputed"):
+            if str(row.get(flag, "")).strip().lower() not in {"true", "false", "1", "0", "yes", "no"}:
+                issues.append(f"некорректный признак: {flag}")
+        if None in row:
+            issues.append("лишние столбцы CSV")
         try:
             if int(row.get("price_from_kzt") or "") <= 0:
                 issues.append("цена должна быть больше нуля")
@@ -85,12 +90,18 @@ class ContractorRepository:
         max_hours = (row.get("max_hours") or "").strip()
         if max_hours:
             try:
-                if float(max_hours) <= 0:
+                if not math.isfinite(float(max_hours)) or float(max_hours) <= 0:
                     issues.append("длительность должна быть больше нуля")
             except ValueError:
                 issues.append("некорректная длительность")
 
         busy_dates = (row.get("busy_dates") or "").strip()
+        # An explicitly empty CSV field means no busy days in the declared calendar.
+        # A missing field or a separators-only value is not an availability statement.
+        if row.get("busy_dates") is None:
+            issues.append("нет поля: календарь")
+        elif busy_dates and not _items(busy_dates):
+            issues.append("некорректный календарь занятости")
         if busy_dates:
             try:
                 parsed_dates = [date.fromisoformat(value) for value in _items(busy_dates)]
@@ -105,7 +116,6 @@ class ContractorRepository:
         return issues
 
     def metadata(self) -> dict:
-        dates = [day for item in self.contractors for day in item.busy_dates]
         return {
             "contractors": len(self.contractors),
             "quarantined_count": len(self.quarantined),
@@ -114,9 +124,8 @@ class ContractorRepository:
             "categories": sorted({value for item in self.contractors for value in item.categories}),
             "event_formats": sorted({value for item in self.contractors for value in item.event_formats}),
             "languages": sorted({value for item in self.contractors for value in item.languages}),
-            "calendar": {"min": min(dates).isoformat(), "max": max(dates).isoformat()},
+            "calendar": {"min": CALENDAR_START.isoformat(), "max": CALENDAR_END.isoformat()},
             "synthetic_count": sum(item.synthetic for item in self.contractors),
             "price_imputed_count": sum(item.price_imputed for item in self.contractors),
             "city_imputed_count": sum(item.city_imputed for item in self.contractors),
         }
-

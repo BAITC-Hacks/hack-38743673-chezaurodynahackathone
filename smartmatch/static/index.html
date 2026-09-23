@@ -1047,6 +1047,18 @@ footer p,footer>a:last-child {
     animation:none
   }
 }
+
+/* Search controls and persistent interest markers. */
+.sort-field { margin-top:20px; }
+.collection-note { font-size:11px; line-height:1.6; color:var(--muted); margin:14px 0 0; }
+.selection-actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:18px; padding-top:18px; border-top:1px solid var(--line); }
+.selection-feedback { font-size:12px; color:var(--muted); }
+.saved-note { color:var(--muted); font-size:12px; margin-top:20px; }
+
+@media(max-width:760px) {
+  .card-head { display:grid; grid-template-columns:28px minmax(0,1fr); }
+  .price { grid-column:2; margin:0; text-align:left; }
+}
 </style>
 <link rel="stylesheet" href="./styles.css"><script src="./app.js" defer></script>
 </head>
@@ -1065,8 +1077,15 @@ footer p,footer>a:last-child {
 <div class="examples"><span>Примеры</span><button type="button" data-example="0">Корпоратив</button><button type="button" data-example="1">Свадьба</button></div><div id="briefNotice" class="notice" role="status" hidden></div>
 <div class="form-divider"><span>Параметры заказа</span><span class="small-muted">* обязательные</span></div>
 <div class="field-grid"><div class="field"><label for="city">Город *</label><select id="city" required><option value="">Выберите город</option></select></div><div class="field"><label for="eventDate">Дата *</label><input id="eventDate" type="date" required aria-describedby="calendarHint"></div><div class="field"><label for="category">Категория *</label><select id="category" required><option value="">Кого ищем?</option></select></div><div class="field"><label for="eventFormat">Формат *</label><select id="eventFormat" required><option value="">Выберите формат</option></select></div><div class="field"><label for="language">Язык</label><select id="language"><option value="">Любой</option></select></div><div class="field"><label for="duration">Длительность, ч</label><input id="duration" type="number" min="0.5" max="24" step="0.5" placeholder="Не указана"></div></div>
-<p id="calendarHint" class="field-hint">Календарь выборки: 23.09–31.12.2026</p><div class="field budget-field"><label for="budget">Максимальный бюджет, ₸ *</label><input id="budget" type="number" min="1" max="1000000000" step="1" placeholder="Например, 1 500 000" required><p class="field-hint">В профилях указана стоимость «от». Итоговую цену нужно уточнить.</p></div>
-<div class="ai-option"><label for="useAI"><input type="checkbox" id="useAI" disabled><span>Учитывать смысл с помощью ИИ</span></label><p id="aiStatus">Проверяем подключение…</p></div><button class="primary-button" id="searchButton" type="submit" disabled><span>Найти подрядчиков</span><span aria-hidden="true">↗</span></button><p class="submit-note">До 3 кандидатов · с объяснением выбора</p>
+<p id="calendarHint" class="field-hint">Календарь выборки: 23.09–31.12.2026</p>
+<div class="field-grid budget-field">
+  <div class="field"><label for="minBudget">Цена от, ₸</label><input id="minBudget" type="number" min="0" max="1000000000" step="1" placeholder="Без минимума"></div>
+  <div class="field"><label for="budget">Бюджет до, ₸ *</label><input id="budget" type="number" min="1" max="1000000000" step="1" placeholder="1 500 000" required></div>
+</div>
+<p class="field-hint">Диапазон относится к стартовой цене в профиле. Итоговую стоимость нужно уточнить.</p>
+<div class="field sort-field"><label for="sortBy">Порядок подбора</label><select id="sortBy"><option value="relevance">По соответствию задаче</option><option value="price_asc">Сначала дешевле</option><option value="price_desc">Сначала дороже</option></select></div>
+<div class="ai-option"><label for="includeSynthetic"><input type="checkbox" id="includeSynthetic" checked><span>Включать синтетические профили</span></label><p>Тестовые записи помечены на карточках.</p></div>
+<div class="ai-option"><label for="useAI"><input type="checkbox" id="useAI" disabled><span>Учитывать смысл с помощью ИИ</span></label><p id="aiStatus">Проверяем подключение…</p></div><button class="primary-button" id="searchButton" type="submit" disabled><span>Найти подрядчиков</span><span aria-hidden="true">↗</span></button><p class="submit-note">До 3 кандидатов · с объяснением выбора</p><p id="storageStatus" class="collection-note">Запросы и результаты сохраняются в базе сервера.</p>
 </form></aside>
 <section class="results-panel" aria-label="Результаты подбора" aria-live="polite" aria-busy="false" id="resultsPanel"><div class="results-heading"><h3>Ваш короткий список</h3><span class="result-count" id="resultCount">0 / 3</span></div><div id="emptyState" class="empty-state"><div class="empty-symbol" aria-hidden="true">✳</div><p class="eyebrow">ПОДХОДЯЩИЕ ЛЮДИ. ПОНЯТНЫЙ ВЫБОР.</p><h3>Хороший подбор начинается<br>с вашей задачи</h3><p>Расскажите, кого ищете, или заполните параметры. Здесь появятся кандидаты, которые проходят ваши условия.</p><button type="button" class="secondary-button" id="demoButton">Посмотреть на примере <span aria-hidden="true">↗</span></button><div class="empty-foot"><span>Проверка занятости</span><span>Объяснение по профилю</span></div></div><div id="result" hidden></div></section>
 </section>

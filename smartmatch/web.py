@@ -4,66 +4,34 @@ import argparse
 import json
 import mimetypes
 import socket
+import sqlite3
+import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from .ai import AIConfig, AIService, _strict_json, recommend_with_ai
-from .brief import MAX_DESCRIPTION, parse_brief
+from .ai import AIConfig, AIService, _strict_json
+from .brief import MAX_DESCRIPTION
 from .engine import RecommendationEngine
-from .models import SearchQuery
-from .repository import ContractorRepository
+from .database import DEFAULT_DATABASE, Database
+from .samples import DEMO_CASES
+from .service import MatchingService
 
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = Path(__file__).resolve().parent / "static"
 DEFAULT_DATA = ROOT / "data" / "contractors.csv"
+DEFAULT_DB = DEFAULT_DATABASE
 MAX_REQUEST_BYTES = 32_768
 
-DEMO_CASES = [
-    {
-        "name": "Плотная категория",
-        "description": "Нужен интеллигентный ведущий на корпоратив в Алматы 15 октября 2026 года. Бюджет до 1,5 млн тенге, 6 часов, русский язык. Для бизнес-аудитории, без навязчивых конкурсов.",
-        "query": {
-            "city": "Алматы", "event_date": "2026-10-15", "event_format": "корпоратив",
-            "category": "Ведущий", "budget_kzt": 1500000, "duration_hours": 6,
-            "language": "русский", "preferences": "интеллигентный ведущий для бизнес-аудитории",
-        },
-    },
-    {
-        "name": "Редкая категория",
-        "description": "Ищем флориста на свадьбу в Алматы 15 октября 2026 года. Бюджет до 700 000 тенге. Русский язык. Нужно авторское цветочное оформление.",
-        "query": {
-            "city": "Алматы", "event_date": "2026-10-15", "event_format": "свадьба",
-            "category": "Флорист", "budget_kzt": 700000, "duration_hours": None,
-            "language": "русский", "preferences": "авторское цветочное оформление",
-        },
-    },
-    {
-        "name": "Условия не проходят",
-        "description": "Нужен ведущий на корпоратив в Алматы 31 декабря 2026 года. Бюджет до 100 000 тенге, 8 часов, казахский язык.",
-        "query": {
-            "city": "Алматы", "event_date": "2026-12-31", "event_format": "корпоратив",
-            "category": "Ведущий", "budget_kzt": 100000, "duration_hours": 8,
-            "language": "казахский", "preferences": "",
-        },
-    },
-    {
-        "name": "Категории нет",
-        "description": "Нужен флорист на свадьбу за рубежом 15 октября 2026 года. Бюджет до 1 млн тенге, русский язык.",
-        "query": {
-            "city": "Зарубежье", "event_date": "2026-10-15", "event_format": "свадьба",
-            "category": "Флорист", "budget_kzt": 1000000, "duration_hours": None,
-            "language": "русский", "preferences": "",
-        },
-    },
-]
+
 
 
 class SmartMatchHandler(BaseHTTPRequestHandler):
     engine: RecommendationEngine
     ai: AIService
+    service: MatchingService
 
     def log_message(self, fmt: str, *args) -> None:
         print(f"{self.address_string()} - {fmt % args}")
@@ -71,10 +39,16 @@ class SmartMatchHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = urlparse(self.path).path
         if path == "/api/meta":
-            self._json({**self.engine.repository.metadata(), "demo_cases": DEMO_CASES, "ai": self.ai.status()})
+            self._json({**self.engine.repository.metadata(), "demo_cases": DEMO_CASES, "ai": self.ai.status(),
+                        "storage": {"enabled": True, "engine": "sqlite"}})
             return
         if path == "/api/health":
-            self._json({"status": "ok", "contractors": len(self.engine.repository.contractors)})
+            try:
+                self.service.database.stats()
+            except sqlite3.Error:
+                self._json({"status": "unavailable", "database": "unavailable"}, HTTPStatus.SERVICE_UNAVAILABLE)
+                return
+            self._json({"status": "ok", "contractors": len(self.engine.repository.contractors), "database": "ok"})
             return
         if path == "/":
             path = "/index.html"
@@ -82,7 +56,7 @@ class SmartMatchHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
-        if path not in {"/api/recommend", "/api/parse-brief"}:
+        if path not in {"/api/recommend", "/api/parse-brief", "/api/selection"}:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         try:
@@ -94,12 +68,21 @@ class SmartMatchHandler(BaseHTTPRequestHandler):
             if "use_ai" in payload and not isinstance(payload["use_ai"], bool):
                 raise ValueError("Поле use_ai должно быть логическим значением")
             if path == "/api/parse-brief":
-                result = parse_brief(payload.get("description"), self.engine.repository.metadata(), self.ai, payload.get("use_ai", True))
+                result = self.service.parse(payload.get("description"), payload.get("use_ai", True))
+            elif path == "/api/selection":
+                for key in ("search_id", "contractor_id"):
+                    if not isinstance(payload.get(key), str) or not 1 <= len(payload[key]) <= 120:
+                        raise ValueError(f"Некорректное поле {key}")
+                created = self.service.database.record_selection(payload["search_id"], payload["contractor_id"])
+                result = {"saved": True, "created": created}
             else:
                 self._validate_query_payload(payload)
-                result = recommend_with_ai(self.engine, SearchQuery.from_dict(payload), self.ai, payload.get("use_ai", True))
+                result = self.service.recommend(payload)
         except (ValueError, TypeError, OverflowError) as exc:
             self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        except sqlite3.Error:
+            self._json({"error": "База данных временно недоступна. Повторите запрос."}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
         except (socket.timeout, TimeoutError):
             self._json({"error": "Время ожидания запроса истекло"}, HTTPStatus.REQUEST_TIMEOUT)
@@ -113,9 +96,12 @@ class SmartMatchHandler(BaseHTTPRequestHandler):
         if not raw_length.isdigit() or len(raw_length) > 8:
             raise ValueError("Некорректная длина запроса")
         length = int(raw_length)
+        self.connection.settimeout(10)
+        if MAX_REQUEST_BYTES < length <= 2 * MAX_REQUEST_BYTES:
+            # Drain a bounded overflow before replying to avoid a Windows TCP reset.
+            self.rfile.read(length)
         if not 0 < length <= MAX_REQUEST_BYTES:
             raise ValueError(f"Размер запроса должен быть от 1 до {MAX_REQUEST_BYTES} байт")
-        self.connection.settimeout(10)
         raw = self.rfile.read(length)
         if len(raw) != length:
             raise ValueError("Запрос получен не полностью")
@@ -156,7 +142,9 @@ class SmartMatchHandler(BaseHTTPRequestHandler):
         content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", f"{content_type}; charset=utf-8")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         self.wfile.write(data)
 
@@ -164,29 +152,40 @@ class SmartMatchHandler(BaseHTTPRequestHandler):
         data = json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(data)
 
 
-def create_server(host: str, port: int, data_path: Path, ai: AIService | None = None) -> ThreadingHTTPServer:
-    repository = ContractorRepository.from_csv(data_path)
-    engine = RecommendationEngine(repository)
+def create_server(host: str, port: int, data_path: Path, ai: AIService | None = None,
+                  db_path: Path = DEFAULT_DB) -> ThreadingHTTPServer:
     ai = ai if ai is not None else AIService(AIConfig.from_env(ROOT))
-    handler = type("ConfiguredSmartMatchHandler", (SmartMatchHandler,), {"engine": engine, "ai": ai})
+    service = MatchingService(Database(db_path), data_path, ai)
+    handler = type("ConfiguredSmartMatchHandler", (SmartMatchHandler,),
+                   {"engine": service.engine, "ai": ai, "service": service})
     return ThreadingHTTPServer((host, port), handler)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="SmartMatch demo server")
+    parser = argparse.ArgumentParser(description="SmartMatch MVP: каталог, подбор и история в SQLite")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--data", type=Path, default=DEFAULT_DATA)
+    parser.add_argument("--db", type=Path, default=DEFAULT_DB, help="Путь к постоянной SQLite-базе")
+    parser.add_argument("--open-browser", action="store_true", help="Открыть сайт после запуска сервера")
     args = parser.parse_args()
-    server = create_server(args.host, args.port, args.data)
+    try:
+        server = create_server(args.host, args.port, args.data, db_path=args.db)
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        parser.error(f"Не удалось запустить сервер: {exc}")
     print(f"SmartMatch: http://{args.host}:{args.port}")
     print(f"Каталог: {len(server.RequestHandlerClass.engine.repository.contractors)} профилей")
+    print(f"База данных: {args.db.resolve()}")
+    if args.open_browser:
+        browser_host = "127.0.0.1" if args.host in {"0.0.0.0", "::"} else args.host
+        webbrowser.open(f"http://{browser_host}:{server.server_port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

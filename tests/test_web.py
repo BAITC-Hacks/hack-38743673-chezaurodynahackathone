@@ -3,9 +3,12 @@ from __future__ import annotations
 import http.client
 import json
 import threading
+import tempfile
+import sqlite3
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from smartmatch.ai import AIConfig, AIService
 from smartmatch.web import DEMO_CASES, MAX_REQUEST_BYTES, create_server
@@ -16,7 +19,9 @@ ROOT = Path(__file__).resolve().parents[1]
 class WebTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.server = create_server("127.0.0.1", 0, ROOT / "data" / "contractors.csv", ai=AIService(AIConfig()))
+        cls.temp = tempfile.TemporaryDirectory()
+        cls.server = create_server("127.0.0.1", 0, ROOT / "data" / "contractors.csv", ai=AIService(AIConfig()),
+                                   db_path=Path(cls.temp.name) / "test.sqlite3")
         cls.server.RequestHandlerClass.log_message = lambda *args: None
         cls.thread = threading.Thread(target=cls.server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
         cls.thread.start()
@@ -26,6 +31,7 @@ class WebTests(unittest.TestCase):
         cls.server.shutdown()
         cls.server.server_close()
         cls.thread.join(timeout=2)
+        cls.temp.cleanup()
 
     def request(self, path, payload=None, raw=None, headers=None, method="POST"):
         connection = http.client.HTTPConnection(*self.server.server_address, timeout=3)
@@ -106,6 +112,56 @@ class WebTests(unittest.TestCase):
             with self.subTest(path=path):
                 status, _ = self.request(path, method="GET")
                 self.assertEqual(status, 404)
+
+    def test_filters_sorting_and_selection_use_persistent_database(self):
+        before = self.server.RequestHandlerClass.service.database.stats()
+        query = {**DEMO_CASES[0]["query"], "min_budget_kzt": 650000,
+                 "include_synthetic": False, "sort_by": "price_asc", "use_ai": False}
+        status, result = self.request("/api/recommend", query)
+        self.assertEqual(status, 200)
+        self.assertTrue(result["saved"])
+        self.assertEqual(len(result["results"]), 3)
+        rows = result["results"]
+        self.assertEqual([r["price_from_kzt"] for r in rows], sorted(r["price_from_kzt"] for r in rows))
+        for row in rows:
+            self.assertFalse(row["synthetic"])
+            self.assertGreaterEqual(row["price_from_kzt"], 650000)
+            self.assertLessEqual(row["price_from_kzt"], query["budget_kzt"])
+            self.assertNotIn(query["event_date"], row["busy_dates"])
+            self.assertIn(query["language"], row["languages"])
+            self.assertIn(query["event_format"], row["event_formats"])
+        selection = {"search_id": result["search_id"], "contractor_id": rows[0]["id"]}
+        status, saved = self.request("/api/selection", selection)
+        self.assertEqual(status, 200)
+        self.assertTrue(saved["created"])
+        status, repeated = self.request("/api/selection", selection)
+        self.assertEqual(status, 200)
+        self.assertFalse(repeated["created"])
+        status, _ = self.request("/api/selection", {**selection, "contractor_id": "not-returned"})
+        self.assertEqual(status, 400)
+        after = self.server.RequestHandlerClass.service.database.stats()
+        self.assertEqual(after["searches"], before["searches"] + 1)
+        self.assertEqual(after["selections"], before["selections"] + 1)
+
+    def test_storage_failure_has_explicit_error(self):
+        database = self.server.RequestHandlerClass.service.database
+        with patch.object(database, "record_search", side_effect=sqlite3.OperationalError("private database path")):
+            status, result = self.request("/api/recommend", {**DEMO_CASES[0]["query"], "use_ai": False})
+        self.assertEqual(status, 503)
+        self.assertNotIn("private", result["error"])
+
+    def test_invalid_new_filters_do_not_write_history(self):
+        database = self.server.RequestHandlerClass.service.database
+        before = database.stats()["searches"]
+        for field, value in (("include_synthetic", "false"), ("sort_by", "random"), ("min_budget_kzt", 2_000_000)):
+            status, _ = self.request("/api/recommend", {**DEMO_CASES[0]["query"], field: value, "use_ai": False})
+            self.assertEqual(status, 400)
+        self.assertEqual(database.stats()["searches"], before)
+
+    def test_database_history_is_not_exposed_as_public_files(self):
+        for path in ("/runtime/smartmatch.sqlite3", "/api/history", "/service.py"):
+            status, _ = self.request(path, method="GET")
+            self.assertEqual(status, 404)
 
 
 if __name__ == "__main__":

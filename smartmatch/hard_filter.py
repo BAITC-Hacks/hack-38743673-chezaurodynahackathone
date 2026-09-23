@@ -18,6 +18,11 @@ class HardFilter:
     def checks(item: Contractor, query: SearchQuery) -> tuple[tuple[str, str, bool], ...]:
         return (
             (
+                "Нужный тип профиля",
+                "синтетические профили отключены",
+                query.include_synthetic or not item.synthetic,
+            ),
+            (
                 "Свободны в дату",
                 "занят в выбранную дату",
                 query.event_date not in item.busy_dates,
@@ -26,6 +31,11 @@ class HardFilter:
                 "В рамках бюджета",
                 "дороже бюджета",
                 item.price_from_kzt <= query.budget_kzt,
+            ),
+            (
+                "Не ниже минимальной цены",
+                "цена ниже нижней границы",
+                item.price_from_kzt >= query.min_budget_kzt,
             ),
             (
                 "Берут формат",
@@ -73,4 +83,3 @@ class HardFilter:
             "exclusions": exclusions,
             "rejections": rejections,
         }
-

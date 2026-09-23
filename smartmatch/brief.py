@@ -69,11 +69,31 @@ def _dates(text: str) -> set[str]:
 
 def _budget(text: str) -> set[int]:
     number = r"\d+(?:[ \u00a0]\d{3})*(?:[.,]\d+)?"
-    multiplier = r"млн\.?|миллион\w*|тыс\.?|тысяч\w*|к(?=\s|$)"
+    multiplier = r"миллион\w*|млн\.?|тысяч\w*|тыс\.?|к(?=\s|$)"
     currency = r"₸|тенге|kzt|тг\.?"
     pattern = rf"(?<![\d./-])({number})\s*({multiplier})?\s*({currency})?"
     values: set[int] = set()
+    range_spans = []
+    range_pattern = rf"(?<![\d./-])(?:от\s+)?({number})\s*({multiplier})?\s*(?:[-–—]|до)\s*({number})\s*({multiplier})?\s*({currency})?"
+    for match in re.finditer(range_pattern, text):
+        prefix = text[max(0, match.start() - 32):match.start()]
+        if not (match[2] or match[4] or match[5] or re.search(r"(?:бюджет\w*|стоимость|цена|лимит)\s*(?:[:—-])?\s*$", prefix)):
+            continue
+        # Mask the complete range so its lower bound can never become the maximum budget.
+        range_spans.append(match.span())
+        if re.match(rf"\s*{FOREIGN_CURRENCY}(?!\w)", text[match.end():]) or re.search(r"[$€£¥]\s*$", prefix):
+            continue
+        if re.match(r"\s*(?:гостей|человек|час\w*|ч\b)", text[match.end():]):
+            continue
+        def amount(number_text, unit):
+            return _number(number_text) * (1_000_000 if unit.startswith(("млн", "миллион")) else 1000 if unit else 1)
+        lower = amount(match[1], match[2] or match[4] or "")
+        upper = amount(match[3], match[4] or match[2] or "")
+        if math.isfinite(upper) and upper.is_integer() and 0 < lower <= upper <= 1_000_000_000:
+            values.add(int(upper))
     for match in re.finditer(pattern, text):
+        if any(start <= match.start() < end for start, end in range_spans):
+            continue
         prefix = text[max(0, match.start() - 32):match.start()]
         # A number must have currency, a monetary multiplier, or budget context.
         if not (match[2] or match[3] or re.search(r"(?:бюджет\w*|стоимость|цена|лимит)\s*(?:до|[:—-])?\s*$", prefix)):
@@ -100,19 +120,26 @@ def _hours(text: str) -> set[float]:
     return {value for value in _mentioned_hours(text) if 0 < value <= MAX_DURATION_HOURS}
 
 
+def _mentioned_options(text: str, options: list[str]) -> set[str]:
+    text = text.casefold().replace("ё", "е")
+    matches = set()
+    for option in options:
+        alias = ALIASES.get(option, re.escape(option.casefold().replace("ё", "е")))
+        for match in re.finditer(rf"(?<!\w)(?:{alias})(?!\w)", text):
+            prefix = text[max(0, match.start() - 48):match.start()]
+            if re.search(r"(?:без|не)\s+(?:(?:в|на|для|нужен|нужна|нужно|нужны|требуется|требуются)\s+){0,2}$", prefix):
+                continue
+            matches.add(option)
+    return matches
+
+
 def extract_local(description: str, metadata: dict) -> tuple[dict, list[str]]:
     text = description.casefold().replace("ё", "е")
     query: dict = {"preferences": description}
     warnings: list[str] = []
     for field, collection in (("city", "cities"), ("category", "categories"),
                               ("event_format", "event_formats"), ("language", "languages")):
-        matches = set()
-        for option in metadata[collection]:
-            alias = ALIASES.get(option, re.escape(option.casefold()))
-            for match in re.finditer(rf"(?<!\w)(?:{alias})(?!\w)", text):
-                if re.search(r"(?:без|не)\s+(?:нужен\s+)?$", text[max(0, match.start() - 20):match.start()]):
-                    continue
-                matches.add(option)
+        matches = _mentioned_options(text, metadata[collection])
         if len(matches) == 1:
             query[field] = matches.pop()
         elif len(matches) > 1:
@@ -161,6 +188,11 @@ def validate_extraction(raw: object, description: str, metadata: dict) -> tuple[
         if field in choices:
             if value not in metadata[choices[field]]:
                 warnings.append(f"Значение поля {field} отсутствует в каталоге; заполните вручную.")
+                continue
+            options = metadata[choices[field]]
+            if (_mentioned_options(quote, options) != {value}
+                    or _mentioned_options(description, options) != {value}):
+                warnings.append(f"Значение поля {field} не подтверждено однозначно описанием; заполните вручную.")
                 continue
             query[field] = value
         elif field == "event_date":

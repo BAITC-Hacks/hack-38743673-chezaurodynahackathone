@@ -1042,3 +1042,15 @@ footer p,footer>a:last-child {
     animation:none
   }
 }
+
+/* Search controls and persistent interest markers. */
+.sort-field { margin-top:20px; }
+.collection-note { font-size:11px; line-height:1.6; color:var(--muted); margin:14px 0 0; }
+.selection-actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:18px; padding-top:18px; border-top:1px solid var(--line); }
+.selection-feedback { font-size:12px; color:var(--muted); }
+.saved-note { color:var(--muted); font-size:12px; margin-top:20px; }
+
+@media(max-width:760px) {
+  .card-head { display:grid; grid-template-columns:28px minmax(0,1fr); }
+  .price { grid-column:2; margin:0; text-align:left; }
+}

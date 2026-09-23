@@ -4,6 +4,7 @@ import csv
 import tempfile
 import time
 import unittest
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -141,7 +142,68 @@ class RecommendationEngineTests(unittest.TestCase):
         self.assertIn("цена должна быть больше нуля", issues)
         self.assertIn("некорректная дата занятости", issues)
 
+    def fixture_profile(self, identifier="base"):
+        return replace(self.repository.contractors[0], id=identifier, city="Алматы", categories=("Ведущий",),
+                       event_formats=("корпоратив",), languages=("русский",), max_hours=8,
+                       price_from_kzt=500_000, synthetic=False, city_imputed=False, price_imputed=False,
+                       busy_dates=frozenset({date(2026, 9, 23), date(2026, 12, 31)}))
+
+    def test_all_filters_work_together_before_top_three(self):
+        base = self.fixture_profile()
+        profiles = [base,
+                    replace(base, id="wrong-city", city="Астана"),
+                    replace(base, id="wrong-category", categories=("Флорист",)),
+                    replace(base, id="busy", busy_dates=base.busy_dates | {date(2026, 10, 15)}),
+                    replace(base, id="too-cheap", price_from_kzt=99_999),
+                    replace(base, id="too-expensive", price_from_kzt=1_500_001),
+                    replace(base, id="wrong-format", event_formats=("свадьба",)),
+                    replace(base, id="wrong-language", languages=("английский",)),
+                    replace(base, id="too-short", max_hours=5),
+                    replace(base, id="synthetic", synthetic=True)]
+        engine = RecommendationEngine(ContractorRepository(tuple(profiles)))
+        query = replace(self.dense_query(), min_budget_kzt=100_000, include_synthetic=False)
+        result = engine.recommend(query)
+        self.assertEqual([row["id"] for row in result["results"]], ["base"])
+        self.assertEqual(result["eligible_count"], 1)
+        self.assertEqual(result["market_count"], 8)
+        rejected = {row["id"] for row in result["rejected_candidates"]}
+        self.assertEqual(rejected, {"busy", "too-cheap", "too-expensive", "wrong-format", "wrong-language", "too-short", "synthetic"})
+
+    def test_price_sort_applies_to_entire_eligible_pool_and_ties_use_id(self):
+        base = self.fixture_profile()
+        profiles = tuple(replace(base, id=identifier, price_from_kzt=price) for identifier, price in
+                         (("e", 800_000), ("b", 400_000), ("a", 400_000), ("d", 700_000), ("c", 500_000)))
+        engine = RecommendationEngine(ContractorRepository(profiles))
+        for mode, expected in (("price_asc", ["a", "b", "c"]), ("price_desc", ["e", "d", "c"])):
+            with self.subTest(mode=mode):
+                result = engine.recommend(replace(self.dense_query(), sort_by=mode))
+                self.assertEqual([row["id"] for row in result["results"]], expected)
+                self.assertEqual(result["sort_by"], mode)
+        tied = RecommendationEngine(ContractorRepository((replace(base, id="z"), replace(base, id="a"))))
+        self.assertEqual([row["id"] for row in tied.recommend(self.dense_query())["results"]], ["a", "z"])
+
+    def test_price_boundaries_are_inclusive_and_synthetic_is_optional(self):
+        base = self.fixture_profile()
+        engine = RecommendationEngine(ContractorRepository((base, replace(base, id="synthetic", synthetic=True))))
+        query = replace(self.dense_query(), min_budget_kzt=500_000, budget_kzt=500_000)
+        self.assertEqual(engine.recommend(query)["eligible_count"], 2)
+        self.assertEqual(engine.recommend(replace(query, include_synthetic=False))["eligible_count"], 1)
+
+    def test_query_validation_and_normalization_are_shared_with_direct_callers(self):
+        payload = {"city": "  Алматы  ", "event_date": " 2026-10-15 ", "event_format": " КОРПОРАТИВ ",
+                   "category": " Ведущий ", "budget_kzt": "500000", "language": " РУССКИЙ ",
+                   "min_budget_kzt": 100_000, "sort_by": "price_asc", "include_synthetic": False}
+        query = SearchQuery.from_dict(payload)
+        self.assertEqual((query.city, query.event_format, query.category, query.language),
+                         ("Алматы", "корпоратив", "Ведущий", "русский"))
+        for field, value in (("city", "  "), ("category", []), ("language", ["русский"]),
+                             ("budget_kzt", True), ("budget_kzt", 12.5), ("min_budget_kzt", -1),
+                             ("min_budget_kzt", 500_001), ("min_budget_kzt", float("nan")),
+                             ("include_synthetic", "false"), ("sort_by", "random"),
+                             ("event_date", "20261015"), ("preferences", []), ("duration_hours", True)):
+            with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                SearchQuery.from_dict({**payload, field: value})
+
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -67,4 +67,3 @@ class TextIndex:
         if len(best) > 170:
             best = best[:167].rsplit(" ", 1)[0] + "…"
         return best.rstrip(".!? ")
-

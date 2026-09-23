@@ -13,3 +13,11 @@ outputs/
 *.log
 
 **/set_test_key.ps1
+
+# Local catalog and collected search history must not be published.
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+exports/
+runtime/
