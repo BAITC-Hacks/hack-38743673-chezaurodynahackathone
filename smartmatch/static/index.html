@@ -9,79 +9,97 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/" aria-label="SmartMatch">
-      <span class="brand-mark">SM</span>
-      <span>SmartMatch</span>
-    </a>
-    <div class="top-meta"><span id="catalogCount">66 профилей</span><span>Детерминированный подбор</span></div>
+    <a class="brand" href="/" aria-label="SmartMatch">SMARTMATCH</a>
+    <div class="top-meta">
+      <span id="catalogCount">66 профилей</span>
+      <span>детерминированный отбор</span>
+    </div>
   </header>
 
   <main>
     <section class="hero">
-      <div>
-        <p class="eyebrow">HackAlem AI · кейс 79-lite</p>
-        <h1>Подрядчики, которых можно обосновать</h1>
-        <p class="lede">Сервис сначала исключает неподходящие профили, затем ранжирует кандидатов и показывает факты, которые повлияли на каждую рекомендацию.</p>
-      </div>
+      <h1>ПОДРЯДЧИКИ, КОТОРЫХ<br>МОЖНО ОБОСНОВАТЬ</h1>
+      <p class="hero-copy">получите до 3<br>идеальных<br>кандидатов под<br>ваши требования</p>
       <div class="quality-card">
-        <span class="quality-number" id="qualityNumber">—</span>
-        <span>профилей прошли проверку критических данных</span>
+        <strong id="qualityNumber">66/66</strong>
+        <span>прошли проверку<br>критических данных</span>
       </div>
     </section>
 
-    <section class="demo-strip" aria-label="Демо-сценарии">
-      <div class="section-label">Быстрые сценарии</div>
-      <div id="demoCases" class="demo-buttons"></div>
+    <div class="slogan" aria-label="Принцип сервиса">
+      <span></span>
+      <p>никаких общих фраз, только аргументированное решение</p>
+      <span></span>
+    </div>
+
+    <section class="benefits" aria-label="Преимущества">
+      <article><strong>🎯 Фокус на главном</strong><p>описание</p></article>
+      <article><strong>💡 Понятная аргументация</strong><p>описание</p></article>
+      <article><strong>⚡ Актуальность данных</strong><p>описание</p></article>
     </section>
 
-    <div class="workspace">
-      <section class="panel form-panel">
-        <div class="panel-heading">
-          <div>
-            <p class="step">Шаг 1</p>
-            <h2>Параметры заказа</h2>
-          </div>
-          <span class="required-note">* обязательные</span>
-        </div>
+    <div class="rule"></div>
+
+    <section class="workspace">
+      <div class="form-panel">
+        <h2>Параметры заказа</h2>
         <form id="searchForm">
           <div class="field-grid">
-            <label>Город *<select id="city" required></select></label>
-            <label>Дата *<input id="eventDate" type="date" required></label>
-            <label>Тип мероприятия *<select id="eventFormat" required></select></label>
-            <label>Категория *<select id="category" required></select></label>
-            <label>Бюджет, ₸ *<input id="budget" type="number" min="50000" step="50000" value="1500000" required></label>
-            <label>Язык<select id="language"><option value="">Не важен</option></select></label>
-            <label>Длительность, ч<input id="duration" type="number" min="1" max="24" step="0.5" placeholder="Не указана"></label>
+            <label>Город*<select id="city" required></select></label>
+            <label>Дата*<input id="eventDate" type="date" required></label>
+            <label>Язык*<select id="language" required></select></label>
+            <label>Категория*<select id="category" required></select></label>
           </div>
-          <label>Что особенно важно<textarea id="preferences" rows="3" placeholder="Например: интеллигентный ведущий для бизнес-аудитории"></textarea></label>
-          <button class="primary" type="submit"><span>Подобрать подрядчиков</span><span aria-hidden="true">→</span></button>
-        </form>
-      </section>
 
-      <section class="panel result-panel" aria-live="polite">
-        <div class="panel-heading">
-          <div><p class="step">Шаг 2</p><h2>Результат и доказательства</h2></div>
-          <span id="runtime" class="runtime"></span>
-        </div>
+          <label class="short-field">Длительность, ч
+            <input id="duration" type="number" min="1" max="24" step="0.5">
+          </label>
+
+          <fieldset class="budget-field">
+            <legend>Бюджет</legend>
+            <div class="budget-inputs">
+              <label><span>От</span><input id="budgetFrom" type="number" min="0" step="50000" value="0"></label>
+              <label><span>До</span><input id="budget" type="number" min="50000" step="50000" value="1500000" required></label>
+            </div>
+            <div class="range-track" aria-hidden="true"><span></span><i></i><i></i></div>
+          </fieldset>
+
+          <label>Дополнительные детали
+            <textarea id="preferences" rows="4"></textarea>
+          </label>
+
+          <label class="format-field">Формат мероприятия*
+            <select id="eventFormat" required></select>
+          </label>
+
+          <button class="primary" type="submit"><span>подобрать подрядчика &gt;</span></button>
+        </form>
+      </div>
+
+      <section class="results-shell" aria-live="polite">
         <div id="emptyState" class="empty-state">
-          <div class="empty-icon">3</div>
-          <h3>До трёх проверенных рекомендаций</h3>
-          <p>Выберите сценарий или заполните параметры. Здесь появятся карточки и путь кандидатов через фильтры.</p>
+          <strong>До 3</strong>
+          <h2>проверенных кандидатов</h2>
+          <p>Заполните параметры заказа — здесь появятся карточки с конкретным объяснением выбора.</p>
         </div>
         <div id="result" hidden></div>
       </section>
-    </div>
-
-    <section class="method">
-      <div><p class="step">Как это работает</p><h2>Правила видны жюри</h2></div>
-      <ol>
-        <li><strong>Quality gate</strong><span>Удаляет записи без города, цены, категории, календаря или описания.</span></li>
-        <li><strong>Жёсткие условия</strong><span>Проверяет дату, бюджет, формат, язык и длительность.</span></li>
-        <li><strong>Ранжирование</strong><span>Считает бюджетный, смысловой и доверительный сигналы с фиксированными весами.</span></li>
-        <li><strong>Объяснение</strong><span>Использует цену, дату и уникальный фрагмент профиля. Общих фраз нет.</span></li>
-      </ol>
     </section>
   </main>
+
+  <footer>
+    <div class="contact">
+      <p>Need help? Contact us!</p>
+      <a href="mailto:foyou@mail.com">foyou@mail.com</a>
+      <a href="tel:000123456789">000-123-456-789</a>
+    </div>
+    <div class="footer-center">
+      <div class="socials" aria-label="Социальные сети"><a href="#" aria-label="Социальная сеть 1"></a><a href="#" aria-label="Социальная сеть 2"></a><a href="#" aria-label="Социальная сеть 3"></a></div>
+      <p>© 2025 Foyou, Inc. All rights reserved.</p>
+    </div>
+    <nav><a href="#">about the company</a><a href="#">user manual</a></nav>
+  </footer>
+
   <script src="/app.js" defer></script>
 </body>
 </html>
