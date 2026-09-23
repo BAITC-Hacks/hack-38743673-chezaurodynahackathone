@@ -1,0 +1,10 @@
+[project]
+name = "smartmatch-hackalem"
+version = "1.0.0"
+description = "Deterministic explainable contractor matching for HackAlem AI"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.ruff]
+line-length = 120
+
