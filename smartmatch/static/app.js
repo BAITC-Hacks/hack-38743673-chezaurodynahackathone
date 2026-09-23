@@ -81,7 +81,44 @@ async function parseBrief(){
 async function onParse(){
   if(state.busy)return;
   setBusy(true,'Разбираем описание…');
-  try{await parseBrief();}catch(error){notice(error.message,true);}finally{s…917 tokens truncated…capeHtml(data.ai.message):''}<br>${escapeHtml(fullDate(query.event_date))} · ${escapeHtml(query.city)} · до ${money(query.budget_kzt)} · ${(runtime/1000).toFixed(1)} с</p><div class="cards">${data.results.map((item,index)=>renderCard(item,index,query)).join('')}</div>${renderAudit(data)}`;
+  try{await parseBrief();}catch(error){notice(error.message,true);}finally{setBusy(false);}
+}
+function examples(index){
+  const items=[
+    {city:'Алматы',event_date:'2026-10-06',category:'Ведущий',event_format:'корпоратив',language:'русский',duration_hours:5,budget_kzt:1000000,description:'Нужен ведущий на корпоратив в Алматы 6 октября 2026 года. Бюджет до 1 млн тенге, русский язык, 5 часов. Интеллигентная подача для бизнес-аудитории, без навязчивых конкурсов.'},
+    {city:'Алматы',event_date:'2026-10-04',category:'Флорист',event_format:'свадьба',language:'русский',duration_hours:null,budget_kzt:500000,description:'Нужен флорист на свадьбу в Алматы 4 октября 2026 года. Бюджет до 500 тысяч тенге. Общение на русском, авторское цветочное оформление и нежные композиции.'}
+  ];return items[index];
+}
+function applyExample(index){
+  const query=examples(index);state.manualFields.clear();applyQuery(query);$('#description').value=query.description;state.briefDirty=false;state.formRevision++;
+  $('#parseState').textContent='Пример';notice('Пример заполнен. Вы можете изменить описание и параметры.');markStale();
+}
+async function submit(event,localDemo=false){
+  if(event)event.preventDefault();if(state.busy||!state.meta)return;
+  setBusy(true,'Проверяем условия…');
+  try{
+    if(state.briefDirty&&$('#description').value.trim()){
+      $('#searchButton').firstElementChild.textContent='Разбираем описание…';
+      const parsed=await parseBrief();if(!parsed)return;
+      notice($('#briefNotice').textContent+' Проверьте распознанные условия и нажмите «Найти подрядчиков» ещё раз.',!!parsed.missing_fields?.length);
+      $('#searchForm').reportValidity();return;
+    }
+    if(!$('#searchForm').reportValidity())return;
+    const query=queryFromForm();if(localDemo)query.use_ai=false;
+    const revision=state.formRevision;
+    $('#emptyState').hidden=true;$('#result').hidden=false;
+    $('#result').innerHTML='<div class="loading-box"><div class="spinner" aria-hidden="true"></div>Проверяем ограничения и сравниваем профили…</div>';
+    const started=performance.now();const data=await request('/api/recommend',query);
+    renderResult(data,query,Math.round(performance.now()-started),localDemo);
+    if(revision!==state.formRevision)markStale();
+    if(window.matchMedia('(max-width:760px)').matches)$('#resultsPanel').scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(error){renderError(error.message);}finally{setBusy(false);}
+}
+function renderResult(data,query,runtime,demo){
+  state.hasResults=true;$('#emptyState').hidden=true;$('#result').hidden=false;$('#resultCount').textContent=data.results.length+' / 3';
+  const success=data.status==='success';
+  const mode=data.ai?.used?'ИИ-подбор':(data.ai?.message||'Локальный поиск по словам. ИИ не использовался.');
+  $('#result').innerHTML=`<div class="outcome ${success?'':'warning'}"><span class="outcome-icon" aria-hidden="true">${success?'✓':'!'}</span><div><h4>${escapeHtml(data.title)}</h4><p>${escapeHtml(data.message)}</p></div></div><p class="mode-note">${demo?'Пример подбора · ':''}${escapeHtml(mode)}${data.ai?.used&&data.ai.message?' · '+escapeHtml(data.ai.message):''}<br>${escapeHtml(fullDate(query.event_date))} · ${escapeHtml(query.city)} · до ${money(query.budget_kzt)} · ${(runtime/1000).toFixed(1)} с</p><div class="cards">${data.results.map((item,index)=>renderCard(item,index,query)).join('')}</div>${renderAudit(data)}`;
 }
 function renderCard(item,index,query){
   const badges=[`<span class="tag">${escapeHtml(item.id)}</span>`,`<span class="tag">${item.synthetic?'Синтетический профиль':'Исходный профиль'}</span>`];

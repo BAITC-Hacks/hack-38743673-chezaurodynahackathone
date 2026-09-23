@@ -85,12 +85,12 @@ class SmartMatchHandler(BaseHTTPRequestHandler):
         if path not in {"/api/recommend", "/api/parse-brief"}:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        origin = self.headers.get("Origin")
-        if origin and urlparse(origin).netloc != self.headers.get("Host"):
-            self._json({"error": "Запрос разрешён только со страницы этого сайта"}, HTTPStatus.FORBIDDEN)
-            return
         try:
             payload = self._read_payload()
+            origin = self.headers.get("Origin")
+            if origin and urlparse(origin).netloc != self.headers.get("Host"):
+                self._json({"error": "Запрос разрешён только со страницы этого сайта"}, HTTPStatus.FORBIDDEN)
+                return
             if "use_ai" in payload and not isinstance(payload["use_ai"], bool):
                 raise ValueError("Поле use_ai должно быть логическим значением")
             if path == "/api/parse-brief":
@@ -107,8 +107,6 @@ class SmartMatchHandler(BaseHTTPRequestHandler):
         self._json(result)
 
     def _read_payload(self) -> dict:
-        if self.headers.get_content_type() != "application/json":
-            raise ValueError("Отправьте запрос в формате application/json")
         if self.headers.get("Transfer-Encoding"):
             raise ValueError("Потоковые запросы не поддерживаются")
         raw_length = self.headers.get("Content-Length", "")
@@ -121,6 +119,10 @@ class SmartMatchHandler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length)
         if len(raw) != length:
             raise ValueError("Запрос получен не полностью")
+        # Drain bounded bodies before rejecting headers. Otherwise Windows may
+        # reset the socket while the client is still sending its request body.
+        if self.headers.get_content_type() != "application/json":
+            raise ValueError("Отправьте запрос в формате application/json")
         try:
             payload = _strict_json(raw.decode("utf-8"))
         except (ValueError, UnicodeError, RecursionError):

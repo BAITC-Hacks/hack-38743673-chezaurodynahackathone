@@ -3,6 +3,7 @@ from __future__ import annotations
 import http.client
 import json
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -78,6 +79,27 @@ class WebTests(unittest.TestCase):
         self.assertEqual(status, 403)
         status, _ = self.request("/api/recommend", {}, headers={"Content-Type": "text/plain"})
         self.assertEqual(status, 400)
+
+    def test_header_errors_wait_for_bounded_request_body(self):
+        for headers, expected_status in (({"Origin": "https://other.example", "Content-Type": "application/json"}, 403),
+                                         ({"Content-Type": "text/plain"}, 400)):
+            with self.subTest(headers=headers):
+                connection = http.client.HTTPConnection(*self.server.server_address, timeout=3)
+                try:
+                    connection.putrequest("POST", "/api/recommend")
+                    connection.putheader("Content-Length", "2")
+                    for name, value in headers.items():
+                        connection.putheader(name, value)
+                    connection.endheaders()
+                    # Separate delivery of headers/body reproduces the Windows
+                    # connection reset if the server rejects without draining.
+                    time.sleep(0.03)
+                    connection.send(b"{}")
+                    response = connection.getresponse()
+                    self.assertEqual(response.status, expected_status)
+                    self.assertIn("error", json.loads(response.read()))
+                finally:
+                    connection.close()
 
     def test_dotenv_and_parent_files_are_not_served(self):
         for path in ("/.env", "/../ai.py", "/../data/contractors.csv"):
