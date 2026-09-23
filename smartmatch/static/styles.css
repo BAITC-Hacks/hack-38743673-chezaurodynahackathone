@@ -58,7 +58,8 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 2px rgba(0, 0, 0, 
 .format-field { display: none; }
 .primary { width: 100%; height: 32px; border: 0; border-radius: 10px; background: var(--ink); color: var(--white); font-size: 10px; cursor: pointer; }
 .primary:disabled { opacity: .55; cursor: wait; }
-.results-shell { min-height: 500px; padding: 18px; }
+.results-shell { min-height: 500px; max-height: 1142px; padding: 18px; overflow-y: auto; scrollbar-width: none; }
+.results-shell::-webkit-scrollbar { width: 0; }
 .empty-state { min-height: 464px; display: grid; place-content: center; padding: 44px; text-align: center; color: var(--muted); }
 .empty-state strong { color: var(--ink); font-size: 44px; }
 .empty-state h2 { margin: 4px 0 10px; color: var(--ink); font-size: 20px; }
@@ -118,7 +119,7 @@ footer nav { text-align: right; }
   .benefits, .workspace { grid-template-columns: 1fr; }
   .workspace { gap: 24px; }
   .form-panel { padding: 30px 22px 24px; }
-  .results-shell { min-height: 0; }
+  .results-shell { min-height: 0; max-height: none; overflow: visible; }
   footer { grid-template-columns: 1fr 1fr; gap: 20px; }
   .footer-center { grid-column: 1 / -1; grid-row: 2; }
   .socials { margin-bottom: 10px; }
