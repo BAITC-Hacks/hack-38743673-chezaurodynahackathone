@@ -1,0 +1,7 @@
+User Interface (Frontend):
+- Clean, functional design free of superfluous graphics; emphasis on the text of the generated questions.
+- Input form with fixed dropdown menus for city, category, format, and language (to prevent user typos).
+- Date picker for selecting dates, specifically within the range of September 23, 2026 – December 31, 2026.
+- Numeric input field for budget.
+- Result cards: Name, Category, City, Price, synthetic tag (if the entry was newly added), and a prominently displayed "Why it fits:" section (LLM output).
+- Empty state blocks: clear text messages explaining the lack of results based on specific criteria (date, budget, or absence from the database).
