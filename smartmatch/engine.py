@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections import Counter
 from datetime import date
 
+from .hard_filter import HardFilter
 from .models import Contractor, SearchQuery
 from .repository import ContractorRepository
 from .text import TextIndex
@@ -46,27 +46,19 @@ class RecommendationEngine:
         if not market:
             return self._empty_market(query)
 
-        stages = [
+        stages: list[dict] = [
             {"stage": "Исходный каталог", "remaining": len(self.repository.contractors) + len(self.repository.quarantined)},
             {"stage": "Критические данные заполнены", "remaining": len(self.repository.contractors)},
             {"stage": "Город и категория", "remaining": len(market)},
         ]
-        current = market
-        checks = (
-            ("Свободны в дату", lambda item: query.event_date not in item.busy_dates),
-            ("В рамках бюджета", lambda item: item.price_from_kzt <= query.budget_kzt),
-            ("Берут формат", lambda item: query.event_format in item.event_formats),
-            ("Работают на языке", lambda item: not query.language or query.language in item.languages),
-            (
-                "Подходят по длительности",
-                lambda item: query.duration_hours is None or item.max_hours is None or query.duration_hours <= item.max_hours,
-            ),
-        )
-        for label, check in checks:
-            current = [item for item in current if check(item)]
-            stages.append({"stage": label, "remaining": len(current)})
-
-        exclusions = self._exclusions(market, query)
+        hard_filter = HardFilter.apply(market, query)
+        current = hard_filter["accepted"]
+        stages.extend(hard_filter["stages"])
+        exclusions = hard_filter["exclusions"]
+        rejected_candidates = [
+            {"id": rejection.contractor_id, "reasons": list(rejection.reasons)}
+            for rejection in hard_filter["rejections"]
+        ]
         if not current:
             return {
                 "status": "no_eligible",
@@ -78,6 +70,7 @@ class RecommendationEngine:
                 "market_count": len(market),
                 "eligible_count": 0,
                 "data_quality_excluded": len(self.repository.quarantined),
+                "rejected_candidates": rejected_candidates,
             }
 
         ranked = sorted(
@@ -100,6 +93,7 @@ class RecommendationEngine:
             "market_count": len(market),
             "eligible_count": len(current),
             "data_quality_excluded": len(self.repository.quarantined),
+            "rejected_candidates": rejected_candidates,
         }
 
     def _rank(self, item: Contractor, query: SearchQuery) -> dict:
@@ -179,19 +173,6 @@ class RecommendationEngine:
                 second += "; " + ", ".join(details)
             second += "."
         return first + " " + second
-
-    @staticmethod
-    def _exclusions(market: list[Contractor], query: SearchQuery) -> dict[str, int]:
-        return {
-            "заняты в выбранную дату": sum(query.event_date in item.busy_dates for item in market),
-            "дороже бюджета": sum(item.price_from_kzt > query.budget_kzt for item in market),
-            "не берут формат": sum(query.event_format not in item.event_formats for item in market),
-            "нет нужного языка": sum(bool(query.language) and query.language not in item.languages for item in market),
-            "не подходят по длительности": sum(
-                query.duration_hours is not None and item.max_hours is not None and query.duration_hours > item.max_hours
-                for item in market
-            ),
-        }
 
     @staticmethod
     def _failure_message(market: list[Contractor], exclusions: dict[str, int]) -> str:

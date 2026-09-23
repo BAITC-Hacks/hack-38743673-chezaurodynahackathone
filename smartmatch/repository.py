@@ -7,6 +7,10 @@ from pathlib import Path
 from .models import Contractor
 
 
+CALENDAR_START = date(2026, 9, 23)
+CALENDAR_END = date(2026, 12, 31)
+
+
 def _items(value: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in (value or "").split("|") if item.strip())
 
@@ -29,12 +33,17 @@ class ContractorRepository:
     def from_csv(cls, path: str | Path) -> "ContractorRepository":
         contractors: list[Contractor] = []
         quarantined: list[dict] = []
+        seen_ids: set[str] = set()
         with Path(path).open("r", encoding="utf-8-sig", newline="") as handle:
             for row_number, row in enumerate(csv.DictReader(handle), start=2):
                 issues = cls._critical_issues(row)
+                contractor_id = (row.get("id") or "").strip()
+                if contractor_id and contractor_id in seen_ids:
+                    issues.append("повторяющийся id")
                 if issues:
-                    quarantined.append({"row": row_number, "id": row.get("id", ""), "issues": issues})
+                    quarantined.append({"row": row_number, "id": contractor_id, "issues": issues})
                     continue
+                seen_ids.add(contractor_id)
                 contractors.append(
                     Contractor(
                         id=row["id"].strip(),
@@ -57,21 +66,42 @@ class ContractorRepository:
     @staticmethod
     def _critical_issues(row: dict[str, str]) -> list[str]:
         checks = {
-            "id": row.get("id", "").strip(),
-            "имя": row.get("anon_name", "").strip(),
-            "категория": row.get("categories", "").strip(),
-            "город": row.get("city", "").strip(),
-            "формат": row.get("event_formats", "").strip(),
-            "язык": row.get("languages", "").strip(),
-            "календарь": row.get("busy_dates", "").strip(),
-            "описание": row.get("description", "").strip(),
+            "id": (row.get("id") or "").strip(),
+            "имя": (row.get("anon_name") or "").strip(),
+            "категория": (row.get("categories") or "").strip(),
+            "город": (row.get("city") or "").strip(),
+            "формат": (row.get("event_formats") or "").strip(),
+            "язык": (row.get("languages") or "").strip(),
+            "календарь": (row.get("busy_dates") or "").strip(),
+            "описание": (row.get("description") or "").strip(),
         }
         issues = [f"нет поля: {label}" for label, value in checks.items() if not value]
         try:
-            if int(row.get("price_from_kzt", "")) <= 0:
+            if int(row.get("price_from_kzt") or "") <= 0:
                 issues.append("цена должна быть больше нуля")
         except (TypeError, ValueError):
             issues.append("нет корректной цены")
+
+        max_hours = (row.get("max_hours") or "").strip()
+        if max_hours:
+            try:
+                if float(max_hours) <= 0:
+                    issues.append("длительность должна быть больше нуля")
+            except ValueError:
+                issues.append("некорректная длительность")
+
+        busy_dates = (row.get("busy_dates") or "").strip()
+        if busy_dates:
+            try:
+                parsed_dates = [date.fromisoformat(value) for value in _items(busy_dates)]
+                if any(value < CALENDAR_START or value > CALENDAR_END for value in parsed_dates):
+                    issues.append("дата занятости вне календаря")
+            except ValueError:
+                issues.append("некорректная дата занятости")
+
+        description = (row.get("description") or "").strip()
+        if description and len(description) < 20:
+            issues.append("описание слишком короткое")
         return issues
 
     def metadata(self) -> dict:

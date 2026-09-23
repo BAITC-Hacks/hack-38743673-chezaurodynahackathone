@@ -8,6 +8,7 @@ from datetime import date
 from pathlib import Path
 
 from smartmatch import ContractorRepository, RecommendationEngine, SearchQuery
+from smartmatch.hard_filter import HardFilter
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -104,6 +105,41 @@ class RecommendationEngineTests(unittest.TestCase):
         self.assertEqual(len(repository.contractors), 65)
         self.assertEqual(len(repository.quarantined), 1)
         self.assertIn("нет поля: город", repository.quarantined[0]["issues"])
+
+    def test_hard_filter_returns_specific_rejection_reasons(self) -> None:
+        query = SearchQuery.from_dict({
+            "city": "Алматы", "event_date": "2026-12-31", "event_format": "корпоратив",
+            "category": "Ведущий", "budget_kzt": 100_000, "duration_hours": 12,
+            "language": "казахский",
+        })
+        candidates = [
+            item for item in self.repository.contractors
+            if item.city == query.city and query.category in item.categories
+        ]
+        result = HardFilter.apply(candidates, query)
+        self.assertFalse(result["accepted"])
+        self.assertTrue(result["rejections"])
+        self.assertEqual(len(result["rejections"]), len(candidates))
+        self.assertTrue(any("дороже бюджета" in item.reasons for item in result["rejections"]))
+
+    def test_invalid_price_and_calendar_are_quarantined(self) -> None:
+        source = ROOT / "data" / "contractors.csv"
+        with source.open("r", encoding="utf-8-sig", newline="") as handle:
+            rows = list(csv.DictReader(handle))
+            columns = list(rows[0])
+        rows[0]["price_from_kzt"] = "0"
+        rows[1]["busy_dates"] = "not-a-date"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "broken.csv"
+            with path.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=columns)
+                writer.writeheader()
+                writer.writerows(rows)
+            repository = ContractorRepository.from_csv(path)
+        self.assertEqual(len(repository.contractors), 64)
+        issues = [issue for row in repository.quarantined for issue in row["issues"]]
+        self.assertIn("цена должна быть больше нуля", issues)
+        self.assertIn("некорректная дата занятости", issues)
 
 
 if __name__ == "__main__":
