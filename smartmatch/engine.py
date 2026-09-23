@@ -138,6 +138,7 @@ class RecommendationEngine:
             "synthetic": item.synthetic,
             "event_formats": list(item.event_formats),
             "languages": list(item.languages),
+            "busy_dates": sorted(value.isoformat() for value in item.busy_dates),
             "max_hours": item.max_hours,
             "score": round(total * 100, 2),
             "score_factors": {
